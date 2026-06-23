@@ -14,7 +14,15 @@ type Action =
   | { type: "moveInSet"; index: number; dir: -1 | 1 }
   | { type: "renameSet"; name: string }
   | { type: "newSet" }
-  | { type: "selectSet"; id: string };
+  | { type: "selectSet"; id: string }
+  | { type: "deleteSet" }
+  | { type: "duplicateSet" }
+  | { type: "moveCard"; trackId: string; x: number; y: number }
+  | { type: "clearLayout" }
+  | { type: "batchSetPhase"; ids: string[]; phase: Phase | null }
+  | { type: "batchSetEnergy"; ids: string[]; energy: number | null }
+  | { type: "batchAddVibe"; ids: string[]; vibe: string }
+  | { type: "batchAddToSet"; ids: string[] };
 
 function patchTags(
   state: PersistState,
@@ -80,6 +88,57 @@ function reducer(state: PersistState, action: Action): PersistState {
     }
     case "selectSet":
       return { ...state, activeSetId: action.id };
+    case "deleteSet": {
+      const rest = state.sets.filter((s) => s.id !== state.activeSetId);
+      const sets = rest.length > 0 ? rest : [{ id: newId(), name: "Set 1", trackIds: [] }];
+      return { ...state, sets, activeSetId: sets[0].id };
+    }
+    case "duplicateSet": {
+      const src = state.sets.find((s) => s.id === state.activeSetId);
+      if (!src) return state;
+      const copy: DJSet = {
+        id: newId(),
+        name: `${src.name} Kopie`,
+        trackIds: [...src.trackIds],
+        positions: src.positions ? { ...src.positions } : undefined,
+      };
+      const i = state.sets.findIndex((s) => s.id === src.id);
+      const sets = [...state.sets];
+      sets.splice(i + 1, 0, copy);
+      return { ...state, sets, activeSetId: copy.id };
+    }
+    case "moveCard":
+      return withActiveSet(state, (s) => ({
+        ...s,
+        positions: { ...(s.positions ?? {}), [action.trackId]: { x: action.x, y: action.y } },
+      }));
+    case "clearLayout":
+      return withActiveSet(state, (s) => ({ ...s, positions: {} }));
+    case "batchSetPhase": {
+      const tags = { ...state.tags };
+      for (const id of action.ids) tags[id] = { ...(tags[id] ?? EMPTY_TAGS), phase: action.phase };
+      return { ...state, tags };
+    }
+    case "batchSetEnergy": {
+      const tags = { ...state.tags };
+      for (const id of action.ids) tags[id] = { ...(tags[id] ?? EMPTY_TAGS), energy: action.energy };
+      return { ...state, tags };
+    }
+    case "batchAddVibe": {
+      const v = action.vibe.trim().toLowerCase();
+      if (!v) return state;
+      const tags = { ...state.tags };
+      for (const id of action.ids) {
+        const prev = tags[id] ?? EMPTY_TAGS;
+        if (!prev.vibe.includes(v)) tags[id] = { ...prev, vibe: [...prev.vibe, v] };
+      }
+      return { ...state, tags };
+    }
+    case "batchAddToSet":
+      return withActiveSet(state, (s) => {
+        const add = action.ids.filter((id) => !s.trackIds.includes(id));
+        return add.length ? { ...s, trackIds: [...s.trackIds, ...add] } : s;
+      });
     default:
       return state;
   }

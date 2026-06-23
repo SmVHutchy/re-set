@@ -9,11 +9,13 @@ Detaillierte Historie: `git log --oneline`.
 - [x] **Energie-Timeline** · Set als Energiekurve, Phasen-Zonen, Übergangs-Ampel `(ed33ba0)`
 - [x] **Agent-Doku** · AGENTS.md + CLAUDE.md `(7c065b7)`
 - [x] **Echte Daten** · Import aus MP3-Ordner (Metadaten + echte Cover) → läuft auf deiner Musik
+- [x] **Set-Canvas** · freie Cover-Fläche, Karten frei ziehen, Verbindungslinien in Set-Reihenfolge
+- [x] **Feinschliff-Runde** · Typo selbst gehostet (Geist, tabular numerals) · Set-Verwaltung (wechseln/duplizieren/löschen + Dauer) · Suche + Sortierung · Batch-Tagging · Audio-Preview mit Wellenform
 
 ## Als Nächstes (Vorschläge)
-- [ ] **Set-Canvas** — freie Cover-Fläche mit Clustern als Set-Abschnitten + Kompatibilitätslinien
 - [ ] **Cover-Wall-Virtualisierung** — flüssig bis 5.000+ Tracks
 - [ ] **Drag & Drop** im Set statt Hoch/Runter-Buttons
+- [ ] **Tracklist-Export** (.m3u / Text kopieren)
 - [ ] **AP3 — Write-Back nach Traktor** — braucht Rust/Tauri-Shell (Backup, Dry-Run)
 
 ## Bekannte Platzhalter

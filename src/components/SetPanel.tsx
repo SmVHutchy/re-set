@@ -9,7 +9,7 @@ import {
   COMPAT_DASH,
 } from "../lib/compat";
 import { PHASE_COLOR } from "../lib/tags";
-import { CaretUp, CaretDown, X, Plus, Stack } from "@phosphor-icons/react";
+import { CaretUp, CaretDown, X, Plus, Stack, CopySimple, Trash } from "@phosphor-icons/react";
 
 interface Props {
   state: PersistState;
@@ -23,6 +23,13 @@ export function SetPanel({ state, trackById, onSelect }: Props) {
   const items = set.trackIds
     .map((id) => trackById.get(id))
     .filter((t): t is Track => Boolean(t));
+  const totalSec = items.reduce((n, t) => n + (t.durationS ?? 0), 0);
+
+  const onDelete = () => {
+    if (items.length === 0 || confirm(`Set „${set.name}" löschen?`)) {
+      dispatch({ type: "deleteSet" });
+    }
+  };
 
   return (
     <section className="rounded-lg border border-line bg-surface p-4">
@@ -33,14 +40,34 @@ export function SetPanel({ state, trackById, onSelect }: Props) {
           onChange={(e) => dispatch({ type: "renameSet", name: e.target.value })}
           className="min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-1 py-0.5 text-[14px] font-medium text-ink outline-none hover:border-line focus:border-line-strong"
         />
-        <span className="font-mono text-[11px] text-ink-faint">{items.length}</span>
-        <button
-          onClick={() => dispatch({ type: "newSet" })}
-          aria-label="Neues Set"
-          className="flex h-6 w-6 items-center justify-center rounded-md border border-line text-ink-soft transition-colors active:translate-y-[1px]"
-        >
+        <IconBtn label="Neues Set" onClick={() => dispatch({ type: "newSet" })}>
           <Plus size={13} weight="bold" />
-        </button>
+        </IconBtn>
+        <IconBtn label="Set duplizieren" onClick={() => dispatch({ type: "duplicateSet" })}>
+          <CopySimple size={13} weight="bold" />
+        </IconBtn>
+        <IconBtn label="Set löschen" onClick={onDelete}>
+          <Trash size={13} weight="bold" />
+        </IconBtn>
+      </div>
+
+      {state.sets.length > 1 && (
+        <select
+          value={state.activeSetId ?? ""}
+          onChange={(e) => dispatch({ type: "selectSet", id: e.target.value })}
+          className="mt-2 w-full rounded-md border border-line bg-base px-2 py-1.5 text-[12px] text-ink outline-none focus:border-line-strong"
+        >
+          {state.sets.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.name} ({s.trackIds.length})
+            </option>
+          ))}
+        </select>
+      )}
+
+      <div className="mt-2 flex items-center justify-between font-mono text-[11px] text-ink-faint">
+        <span>{items.length} Tracks</span>
+        <span>{fmtDuration(totalSec)}</span>
       </div>
 
       {items.length === 0 ? (
@@ -125,6 +152,13 @@ export function SetPanel({ state, trackById, onSelect }: Props) {
       )}
     </section>
   );
+}
+
+function fmtDuration(sec: number): string {
+  if (!sec) return "—";
+  const h = Math.floor(sec / 3600);
+  const m = Math.round((sec % 3600) / 60);
+  return h ? `${h}h ${m}m` : `${m} min`;
 }
 
 function IconBtn({

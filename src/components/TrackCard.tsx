@@ -16,8 +16,11 @@ interface Props {
   tags: TrackTags;
   selected: boolean;
   inSet: boolean;
+  selectMode: boolean;
+  checked: boolean;
   onSelect: (id: string) => void;
   onAdd: (id: string) => void;
+  onToggle: (id: string) => void;
 }
 
 export const TrackCard = memo(function TrackCard({
@@ -25,19 +28,23 @@ export const TrackCard = memo(function TrackCard({
   tags,
   selected,
   inSet,
+  selectMode,
+  checked,
   onSelect,
   onAdd,
+  onToggle,
 }: Props) {
   const phaseColor = tags.phase ? PHASE_COLOR[tags.phase] : null;
+  const active = selectMode ? checked : selected;
 
   return (
     <article className="group flex flex-col">
       <button
-        onClick={() => onSelect(track.id)}
+        onClick={() => (selectMode ? onToggle(track.id) : onSelect(track.id))}
         className="relative aspect-square w-full overflow-hidden rounded-lg border text-left transition-transform duration-200 active:scale-[0.98]"
         style={{
-          borderColor: selected ? "var(--color-accent)" : "var(--color-line)",
-          boxShadow: selected ? "0 0 0 1px var(--color-accent)" : "none",
+          borderColor: active ? "var(--color-accent)" : "var(--color-line)",
+          boxShadow: active ? "0 0 0 1px var(--color-accent)" : "none",
           background: phaseColor
             ? `radial-gradient(120% 120% at 70% 15%, color-mix(in oklab, ${phaseColor} 40%, var(--color-base)) 0%, var(--color-base) 70%)`
             : "var(--color-surface)",
@@ -86,6 +93,21 @@ export const TrackCard = memo(function TrackCard({
             {track.keyCamelot}
           </span>
         )}
+
+        {selectMode && (
+          <span
+            className="absolute right-2 top-2 flex h-5 w-5 items-center justify-center rounded-full border"
+            style={{
+              borderColor: checked ? "var(--color-accent)" : "var(--color-line-strong)",
+              background: checked
+                ? "var(--color-accent)"
+                : "color-mix(in oklab, var(--color-base) 60%, transparent)",
+              color: "#3b1426",
+            }}
+          >
+            {checked && <Check size={12} weight="bold" />}
+          </span>
+        )}
       </button>
 
       <div className="mt-2 flex min-w-0 items-start gap-1.5">
@@ -98,17 +120,19 @@ export const TrackCard = memo(function TrackCard({
             <span>{tags.energy != null ? `E${tags.energy}` : "E–"}</span>
           </div>
         </div>
-        <button
-          onClick={() => onAdd(track.id)}
-          aria-label={inSet ? "Im Set" : "Zum Set hinzufügen"}
-          className="mt-0.5 flex h-6 w-6 flex-none items-center justify-center rounded-md border transition-colors active:translate-y-[1px]"
-          style={{
-            borderColor: inSet ? "var(--color-sig)" : "var(--color-line)",
-            color: inSet ? "var(--color-sig)" : "var(--color-ink-soft)",
-          }}
-        >
-          {inSet ? <Check size={13} weight="bold" /> : <Plus size={13} weight="bold" />}
-        </button>
+        {!selectMode && (
+          <button
+            onClick={() => onAdd(track.id)}
+            aria-label={inSet ? "Im Set" : "Zum Set hinzufügen"}
+            className="mt-0.5 flex h-6 w-6 flex-none items-center justify-center rounded-md border transition-colors active:translate-y-[1px]"
+            style={{
+              borderColor: inSet ? "var(--color-sig)" : "var(--color-line)",
+              color: inSet ? "var(--color-sig)" : "var(--color-ink-soft)",
+            }}
+          >
+            {inSet ? <Check size={13} weight="bold" /> : <Plus size={13} weight="bold" />}
+          </button>
+        )}
       </div>
     </article>
   );

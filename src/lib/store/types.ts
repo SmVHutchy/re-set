@@ -6,10 +6,16 @@ export interface TrackTags {
   vibe: string[];
 }
 
+export interface CanvasPos {
+  x: number;
+  y: number;
+}
+
 export interface DJSet {
   id: string;
   name: string;
   trackIds: string[];
+  positions?: Record<string, CanvasPos>; // Set-Canvas Kartenpositionen
 }
 
 export interface PersistState {

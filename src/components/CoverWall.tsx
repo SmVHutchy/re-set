@@ -14,8 +14,11 @@ interface Props {
   selectedId: string | null;
   loading: boolean;
   error: string | null;
+  selectMode: boolean;
+  selection: Set<string>;
   onSelect: (id: string) => void;
   onAdd: (id: string) => void;
+  onToggle: (id: string) => void;
 }
 
 function SkeletonGrid() {
@@ -39,8 +42,11 @@ export function CoverWall({
   selectedId,
   loading,
   error,
+  selectMode,
+  selection,
   onSelect,
   onAdd,
+  onToggle,
 }: Props) {
   if (loading) return <SkeletonGrid />;
 
@@ -78,8 +84,11 @@ export function CoverWall({
           tags={state.tags[t.id] ?? EMPTY_TAGS}
           selected={t.id === selectedId}
           inSet={setIds.has(t.id)}
+          selectMode={selectMode}
+          checked={selection.has(t.id)}
           onSelect={onSelect}
           onAdd={onAdd}
+          onToggle={onToggle}
         />
       ))}
     </div>

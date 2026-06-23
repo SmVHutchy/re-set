@@ -2,15 +2,42 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { parseNml, type Track } from "./lib/nml";
 import { PHASES, PHASE_COLOR, type Phase } from "./lib/tags";
 import { useStore, getTags, activeSet } from "./lib/store/StoreProvider";
-import { isTagged } from "./lib/store/types";
+import { isTagged, type PersistState } from "./lib/store/types";
 import { CoverWall } from "./components/CoverWall";
 import { Inspector } from "./components/Inspector";
 import { SetPanel } from "./components/SetPanel";
 import { EnergyTimeline } from "./components/EnergyTimeline";
-import { Waveform, GridFour, WaveSine } from "@phosphor-icons/react";
+import { SetCanvas } from "./components/SetCanvas";
+import { BatchBar } from "./components/BatchBar";
+import { Waveform, GridFour, WaveSine, Graph, MagnifyingGlass, Checks } from "@phosphor-icons/react";
 
 type Filter = Phase | "all" | "untagged";
-type View = "library" | "timeline";
+type View = "library" | "timeline" | "canvas";
+type SortKey = "order" | "title" | "artist" | "bpm" | "key" | "energy";
+
+function camelotVal(c: string | null): number {
+  if (!c) return Infinity;
+  const m = c.match(/^(\d{1,2})([AB])$/);
+  if (!m) return Infinity;
+  return parseInt(m[1], 10) * 2 + (m[2] === "B" ? 1 : 0);
+}
+
+function cmpTracks(a: Track, b: Track, key: SortKey, state: PersistState): number {
+  switch (key) {
+    case "title":
+      return a.title.localeCompare(b.title);
+    case "artist":
+      return a.artist.localeCompare(b.artist);
+    case "bpm":
+      return (a.bpm ?? Infinity) - (b.bpm ?? Infinity);
+    case "key":
+      return camelotVal(a.keyCamelot) - camelotVal(b.keyCamelot);
+    case "energy":
+      return (getTags(state, a.id).energy ?? Infinity) - (getTags(state, b.id).energy ?? Infinity);
+    default:
+      return 0;
+  }
+}
 
 // Bevorzugt die lokal importierte Library (MP3-Import / echte .nml),
 // fällt sonst auf die mitgelieferte Beispiel-Fixture zurück.
@@ -30,6 +57,10 @@ export function App() {
   const [filter, setFilter] = useState<Filter>("all");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [view, setView] = useState<View>("library");
+  const [search, setSearch] = useState("");
+  const [sortKey, setSortKey] = useState<SortKey>("order");
+  const [selectMode, setSelectMode] = useState(false);
+  const [selection, setSelection] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     let alive = true;
@@ -63,16 +94,39 @@ export function App() {
   );
 
   const shown = useMemo(() => {
-    if (filter === "all") return tracks;
-    if (filter === "untagged") return tracks.filter((t) => !isTagged(getTags(state, t.id)));
-    return tracks.filter((t) => getTags(state, t.id).phase === filter);
-  }, [tracks, filter, state]);
+    let list = tracks;
+    if (filter === "untagged") list = list.filter((t) => !isTagged(getTags(state, t.id)));
+    else if (filter !== "all") list = list.filter((t) => getTags(state, t.id).phase === filter);
+
+    const q = search.trim().toLowerCase();
+    if (q) {
+      list = list.filter(
+        (t) => t.title.toLowerCase().includes(q) || t.artist.toLowerCase().includes(q),
+      );
+    }
+    if (sortKey !== "order") {
+      list = [...list].sort((a, b) => cmpTracks(a, b, sortKey, state));
+    }
+    return list;
+  }, [tracks, filter, search, sortKey, state]);
 
   const onSelect = useCallback((id: string) => setSelectedId(id), []);
   const onAdd = useCallback(
     (id: string) => dispatch({ type: "addToSet", trackId: id }),
     [dispatch],
   );
+  const onToggle = useCallback((id: string) => {
+    setSelection((prev) => {
+      const n = new Set(prev);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
+  }, []);
+  const toggleSelectMode = () => {
+    setSelectMode((m) => !m);
+    setSelection(new Set());
+  };
 
   const selectedTrack = selectedId ? trackById.get(selectedId) ?? null : null;
 
@@ -89,6 +143,9 @@ export function App() {
           </ViewTab>
           <ViewTab active={view === "timeline"} onClick={() => setView("timeline")}>
             <WaveSine size={14} weight="regular" /> Timeline
+          </ViewTab>
+          <ViewTab active={view === "canvas"} onClick={() => setView("canvas")}>
+            <Graph size={14} weight="regular" /> Canvas
           </ViewTab>
         </div>
         {!loading && !error && (
@@ -114,8 +171,53 @@ export function App() {
             </FilterChip>
           </nav>
 
-          <div className="mt-7 grid grid-cols-1 gap-8 lg:grid-cols-[1fr_340px]">
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            <div className="relative min-w-[180px] flex-1">
+              <MagnifyingGlass
+                size={15}
+                className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-faint"
+              />
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Titel oder Artist suchen…"
+                className="h-8 w-full rounded-md border border-line bg-base pl-8 pr-2 text-[13px] text-ink outline-none placeholder:text-ink-faint focus:border-line-strong"
+              />
+            </div>
+            <select
+              value={sortKey}
+              onChange={(e) => setSortKey(e.target.value as SortKey)}
+              className="h-8 rounded-md border border-line bg-base px-2 text-[12px] text-ink outline-none focus:border-line-strong"
+            >
+              <option value="order">hinzugefügt</option>
+              <option value="title">Titel</option>
+              <option value="artist">Artist</option>
+              <option value="bpm">BPM</option>
+              <option value="key">Key</option>
+              <option value="energy">Energie</option>
+            </select>
+            <button
+              onClick={toggleSelectMode}
+              className="flex h-8 items-center gap-1.5 rounded-md border px-2.5 text-[12px] font-medium transition-colors active:translate-y-[1px]"
+              style={{
+                borderColor: selectMode ? "var(--color-accent)" : "var(--color-line)",
+                color: selectMode ? "var(--color-accent)" : "var(--color-ink-soft)",
+              }}
+            >
+              <Checks size={14} weight="regular" /> Auswahl
+            </button>
+          </div>
+
+          <div className="mt-6 grid grid-cols-1 gap-8 lg:grid-cols-[1fr_340px]">
             <main>
+              {selectMode && (
+                <BatchBar
+                  ids={[...selection]}
+                  visibleCount={shown.length}
+                  onSelectAllVisible={() => setSelection(new Set(shown.map((t) => t.id)))}
+                  onClear={() => setSelection(new Set())}
+                />
+              )}
               <CoverWall
                 tracks={shown}
                 state={state}
@@ -123,8 +225,11 @@ export function App() {
                 selectedId={selectedId}
                 loading={loading}
                 error={error}
+                selectMode={selectMode}
+                selection={selection}
                 onSelect={onSelect}
                 onAdd={onAdd}
+                onToggle={onToggle}
               />
             </main>
 
@@ -138,9 +243,25 @@ export function App() {
             </aside>
           </div>
         </>
-      ) : (
+      ) : view === "timeline" ? (
         <div className="mt-7 flex flex-col gap-6">
           <EnergyTimeline
+            state={state}
+            trackById={trackById}
+            selectedId={selectedId}
+            onSelect={onSelect}
+          />
+          <div className="lg:max-w-md">
+            <Inspector
+              track={selectedTrack}
+              tags={selectedTrack ? getTags(state, selectedTrack.id) : { energy: null, phase: null, vibe: [] }}
+              inSet={selectedTrack ? setIds.has(selectedTrack.id) : false}
+            />
+          </div>
+        </div>
+      ) : (
+        <div className="mt-7 flex flex-col gap-6">
+          <SetCanvas
             state={state}
             trackById={trackById}
             selectedId={selectedId}

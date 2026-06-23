@@ -2,7 +2,7 @@
 // zieht die eingebetteten Cover nach public/covers/. Read-only auf der Quelle.
 // Nutzung:  node scripts/import-music.mjs "/Pfad/zum/Musik-Ordner"
 import { parseFile } from "music-metadata";
-import { readdir, mkdir, writeFile } from "node:fs/promises";
+import { readdir, mkdir, writeFile, copyFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { join, extname, basename, resolve } from "node:path";
 
@@ -17,7 +17,9 @@ if (!inputDir) {
 const root = resolve(inputDir);
 const publicDir = resolve("public");
 const coversDir = join(publicDir, "covers");
+const audioDir = join(publicDir, "audio");
 await mkdir(coversDir, { recursive: true });
+await mkdir(audioDir, { recursive: true });
 
 const esc = (s) =>
   String(s ?? "")
@@ -54,21 +56,33 @@ for (const f of files) {
     const genre = (c.genre && c.genre[0]) || "";
     const bpm = c.bpm ? Math.round(Number(c.bpm)) : null;
     const key = c.key || "";
+    const dur = md.format && md.format.duration ? Math.round(md.format.duration) : null;
+    const hash = createHash("sha1").update(full).digest("hex").slice(0, 12);
 
     let coverAttr = "";
     const pic = c.picture && c.picture[0];
     if (pic && pic.data) {
       const ext = extFor(pic.format);
-      const name = createHash("sha1").update(full).digest("hex").slice(0, 12) + "." + ext;
+      const name = hash + "." + ext;
       await writeFile(join(coversDir, name), Buffer.from(pic.data));
       coverAttr = ` COVERART="/covers/${name}"`;
       withCover++;
     }
+
+    // Audio fürs Web-Preview nach public/audio/ kopieren.
+    const audioName = hash + extname(f).toLowerCase();
+    await copyFile(full, join(audioDir, audioName));
+    const audioAttr = ` AUDIO="/audio/${audioName}"`;
+
     if (bpm) withBpm++;
     if (key) withKey++;
 
     const albumNode = album ? `\n    <ALBUM TITLE="${esc(album)}"></ALBUM>` : "";
-    const infoAttrs = [genre && `GENRE="${esc(genre)}"`, key && `KEY="${esc(key)}"`]
+    const infoAttrs = [
+      genre && `GENRE="${esc(genre)}"`,
+      key && `KEY="${esc(key)}"`,
+      dur && `PLAYTIME="${dur}"`,
+    ]
       .filter(Boolean)
       .join(" ");
     const infoNode = `\n    <INFO ${infoAttrs}></INFO>`;
@@ -77,7 +91,7 @@ for (const f of files) {
       : "";
 
     entries.push(
-      `  <ENTRY TITLE="${esc(title)}" ARTIST="${esc(artist)}"${coverAttr}>` +
+      `  <ENTRY TITLE="${esc(title)}" ARTIST="${esc(artist)}"${coverAttr}${audioAttr}>` +
         `\n    <LOCATION DIR="${esc(root)}/" FILE="${esc(f)}" VOLUME=""></LOCATION>` +
         albumNode +
         infoNode +

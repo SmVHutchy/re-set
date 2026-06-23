@@ -12,6 +12,8 @@ export interface Track {
   path: string | null;
   rating: number | null;
   coverPath: string | null;
+  audioPath: string | null;
+  durationS: number | null;
 }
 
 function num(v: string | null): number | null {
@@ -67,9 +69,11 @@ export function parseNml(xml: string): Track[] {
       keyRaw,
       path,
       rating: num(info?.getAttribute("RANKING") ?? null),
-      // COVERART ist eine Eigenheit unseres MP3-Importers; echte Traktor-Dateien
-      // haben es nicht (→ null, Fallback auf getönte Kachel).
+      // COVERART/AUDIO sind Eigenheiten unseres MP3-Importers; echte Traktor-Dateien
+      // haben sie nicht (→ null, Fallback auf getönte Kachel / kein Preview).
       coverPath: entry.getAttribute("COVERART"),
+      audioPath: entry.getAttribute("AUDIO"),
+      durationS: num(info?.getAttribute("PLAYTIME") ?? null),
     });
   }
 

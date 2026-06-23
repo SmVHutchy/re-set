@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
 @theme {
-  --font-sans: "Geist", system-ui, -apple-system, sans-serif;
-  --font-mono: "Geist Mono", ui-monospace, "SF Mono", monospace;
+  --font-sans: "Geist Variable", system-ui, -apple-system, sans-serif;
+  --font-mono: "Geist Mono Variable", ui-monospace, "SF Mono", monospace;
 
   /* Neutrale — warmes Graphit (PFLICHTENHEFT §15.1) */
   --color-base: #14130f;
@@ -46,6 +46,14 @@ body {
   font-family: var(--font-sans);
   overflow-x: clip;
   -webkit-font-smoothing: antialiased;
+  font-variant-numeric: tabular-nums;
+}
+
+code,
+kbd,
+samp,
+.font-mono {
+  font-variant-numeric: tabular-nums;
 }
 
 @keyframes sf-shimmer {

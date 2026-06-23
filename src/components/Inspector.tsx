@@ -3,6 +3,7 @@ import type { Track } from "../lib/nml";
 import type { TrackTags } from "../lib/store/types";
 import { useStore } from "../lib/store/StoreProvider";
 import { PHASES, PHASE_COLOR, VIBE_SUGGESTIONS } from "../lib/tags";
+import { AudioPreview } from "./AudioPreview";
 import { Plus, Check, X, SlidersHorizontal } from "@phosphor-icons/react";
 
 interface Props {
@@ -43,6 +44,8 @@ export function Inspector({ track, tags, inSet }: Props) {
           {track.genre && <span className="truncate">· {track.genre}</span>}
         </div>
       </div>
+
+      {track.audioPath && <AudioPreview key={track.audioPath} src={track.audioPath} />}
 
       <Field label="Energie">
         <div className="flex gap-1">

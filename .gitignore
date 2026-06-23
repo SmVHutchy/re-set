@@ -6,6 +6,7 @@ dist-ssr
 ._*
 .vite
 
-# Lokal importierte Library + Cover (privat, nicht committen)
+# Lokal importierte Library + Cover + Audio (privat, nicht committen)
 public/collection.local.nml
 public/covers/
+public/audio/

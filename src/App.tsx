@@ -12,6 +12,16 @@ import { Waveform, GridFour, WaveSine } from "@phosphor-icons/react";
 type Filter = Phase | "all" | "untagged";
 type View = "library" | "timeline";
 
+// Bevorzugt die lokal importierte Library (MP3-Import / echte .nml),
+// fällt sonst auf die mitgelieferte Beispiel-Fixture zurück.
+async function loadCollection(): Promise<string> {
+  for (const url of ["/collection.local.nml", "/collection.sample.nml"]) {
+    const r = await fetch(url);
+    if (r.ok) return r.text();
+  }
+  throw new Error("Keine collection.nml gefunden.");
+}
+
 export function App() {
   const { state, dispatch } = useStore();
   const [tracks, setTracks] = useState<Track[]>([]);
@@ -23,11 +33,7 @@ export function App() {
 
   useEffect(() => {
     let alive = true;
-    fetch("/collection.sample.nml")
-      .then((r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return r.text();
-      })
+    loadCollection()
       .then((xml) => {
         if (!alive) return;
         setTracks(parseNml(xml));

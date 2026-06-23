@@ -27,6 +27,17 @@ npm run dev
 
 ## Eigene Library testen
 
-Ersetze `public/collection.sample.nml` durch eine **Kopie** deiner echten
-`collection.nml` (Traktor: Dokumente → Native Instruments → Traktor …) und lade neu.
-Der Parser arbeitet read-only auf der Kopie — deine echte Library wird nie angefasst.
+Zwei Wege — die App lädt `collection.local.nml` bevorzugt, sonst die Beispiel-Fixture:
+
+**A) Ordner mit Musik importieren** (zieht Metadaten + echte Cover aus den Dateien):
+
+```bash
+npm run import:music -- "/Pfad/zu/deinem/Musik-Ordner"
+```
+
+Schreibt `public/collection.local.nml` + `public/covers/` (beide gitignored, read-only auf der Quelle).
+BPM/Key kommen nur, wenn sie in den Datei-Tags stehen.
+
+**B) Echte Traktor-Library:** Kopiere deine `collection.nml`
+(Traktor: Dokumente → Native Instruments → Traktor …) nach `public/collection.local.nml`.
+Hat alle analysierten BPM/Keys → harmonische Kompatibilität funktioniert voll.

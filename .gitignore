@@ -5,3 +5,7 @@ dist-ssr
 .DS_Store
 ._*
 .vite
+
+# Lokal importierte Library + Cover (privat, nicht committen)
+public/collection.local.nml
+public/covers/

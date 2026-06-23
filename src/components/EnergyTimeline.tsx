@@ -154,16 +154,25 @@ export function EnergyTimeline({ state, trackById, selectedId, onSelect }: Props
                       }}
                       title={`${t.title} — ${t.artist}`}
                     >
-                      <span
-                        className="font-mono text-[15px] font-medium"
-                        style={{
-                          color: phaseColor
-                            ? `color-mix(in oklab, ${phaseColor} 65%, var(--color-ink))`
-                            : "var(--color-ink-faint)",
-                        }}
-                      >
-                        {initials(t.artist)}
-                      </span>
+                      {t.coverPath ? (
+                        <img
+                          src={t.coverPath}
+                          alt=""
+                          loading="lazy"
+                          className="absolute inset-0 h-full w-full object-cover"
+                        />
+                      ) : (
+                        <span
+                          className="font-mono text-[15px] font-medium"
+                          style={{
+                            color: phaseColor
+                              ? `color-mix(in oklab, ${phaseColor} 65%, var(--color-ink))`
+                              : "var(--color-ink-faint)",
+                          }}
+                        >
+                          {initials(t.artist)}
+                        </span>
+                      )}
                       {t.keyCamelot && (
                         <span
                           className="absolute bottom-0.5 right-0.5 rounded px-1 font-mono text-[9px] font-medium"

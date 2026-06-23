@@ -43,16 +43,25 @@ export const TrackCard = memo(function TrackCard({
             : "var(--color-surface)",
         }}
       >
-        <span
-          className="absolute inset-0 flex items-center justify-center font-mono text-3xl font-medium tracking-tight"
-          style={{
-            color: phaseColor
-              ? `color-mix(in oklab, ${phaseColor} 65%, var(--color-ink))`
-              : "var(--color-ink-faint)",
-          }}
-        >
-          {initials(track.artist)}
-        </span>
+        {track.coverPath ? (
+          <img
+            src={track.coverPath}
+            alt=""
+            loading="lazy"
+            className="absolute inset-0 h-full w-full object-cover"
+          />
+        ) : (
+          <span
+            className="absolute inset-0 flex items-center justify-center font-mono text-3xl font-medium tracking-tight"
+            style={{
+              color: phaseColor
+                ? `color-mix(in oklab, ${phaseColor} 65%, var(--color-ink))`
+                : "var(--color-ink-faint)",
+            }}
+          >
+            {initials(track.artist)}
+          </span>
+        )}
 
         {tags.phase && (
           <span

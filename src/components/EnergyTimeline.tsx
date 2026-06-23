@@ -186,6 +186,13 @@ export function EnergyTimeline({ state, trackById, selectedId, onSelect }: Props
                       onPointerDown={(e) => onTileDown(e, t.id)}
                       onPointerMove={onTileMove}
                       onPointerUp={onTileUp}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          onSelect(t.id);
+                        }
+                      }}
+                      aria-label={`${t.title} – ${t.artist}`}
                       className="absolute left-1/2 flex touch-none cursor-ns-resize items-center justify-center overflow-hidden rounded-md border transition-transform active:scale-[0.97]"
                       style={{
                         top: center - TILE / 2,

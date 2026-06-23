@@ -15,8 +15,11 @@ Detaillierte Historie: `git log --oneline`.
 - [x] **Drag & Drop** im Set + **Tracklist-Export** (.m3u / Text kopieren)
 - [x] **Editor- & Ordnungs-Runde** · Timeline-Auto-Order (Harmonize) + Energie an der Kurve ziehen · Canvas Cluster-Zonen (Drop taggt Phase) + harmonische Nachbarn · Library-Health (fehlende Keys/BPM/Cover, Duplikate) · Smart-Crates (Regel-Playlists)
 
+- [x] **Politur-Runde** · Undo/Redo (⌘Z / ⌘⇧Z) · Stats-Verteilung (Phasen/Energie/Genres) in Health · Timeline-Kacheln per Tastatur auswählbar
+
 ## Als Nächstes (Vorschläge)
 - [ ] **Cover-Wall-Virtualisierung** — flüssig bis 5.000+ Tracks
+- [ ] **Re-Sync** mit Traktor (geänderte/neue/entfernte Tracks)
 - [ ] **AP3 — Write-Back nach Traktor** — braucht Rust/Tauri-Shell (Backup, Dry-Run)
 
 ## Bekannte Platzhalter

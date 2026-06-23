@@ -26,7 +26,9 @@ type Action =
   | { type: "batchAddToSet"; ids: string[] }
   | { type: "replaceSetOrder"; ids: string[] }
   | { type: "addSmartCrate"; crate: SmartCrate }
-  | { type: "deleteSmartCrate"; id: string };
+  | { type: "deleteSmartCrate"; id: string }
+  | { type: "undo" }
+  | { type: "redo" };
 
 function patchTags(
   state: PersistState,
@@ -165,21 +167,62 @@ function reducer(state: PersistState, action: Action): PersistState {
   }
 }
 
+interface History {
+  past: PersistState[];
+  present: PersistState;
+  future: PersistState[];
+}
+
+const HISTORY_LIMIT = 60;
+
+function historyReducer(h: History, action: Action): History {
+  if (action.type === "undo") {
+    if (h.past.length === 0) return h;
+    const prev = h.past[h.past.length - 1];
+    return { past: h.past.slice(0, -1), present: prev, future: [h.present, ...h.future] };
+  }
+  if (action.type === "redo") {
+    if (h.future.length === 0) return h;
+    const next = h.future[0];
+    return { past: [...h.past, h.present], present: next, future: h.future.slice(1) };
+  }
+  const present = reducer(h.present, action);
+  if (present === h.present) return h; // keine Änderung → nicht in die History
+  return { past: [...h.past, h.present].slice(-HISTORY_LIMIT), present, future: [] };
+}
+
 interface StoreValue {
   state: PersistState;
   dispatch: React.Dispatch<Action>;
+  canUndo: boolean;
+  canRedo: boolean;
 }
 
 const StoreCtx = createContext<StoreValue | null>(null);
 
 export function StoreProvider({ children }: { children: React.ReactNode }) {
-  const [state, dispatch] = useReducer(reducer, undefined, loadState);
+  const [history, dispatch] = useReducer(historyReducer, undefined, () => ({
+    past: [],
+    present: loadState(),
+    future: [],
+  }));
 
   useEffect(() => {
-    saveState(state);
-  }, [state]);
+    saveState(history.present);
+  }, [history.present]);
 
-  return <StoreCtx.Provider value={{ state, dispatch }}>{children}</StoreCtx.Provider>;
+  return (
+    <StoreCtx.Provider
+      value={{
+        state: history.present,
+        dispatch,
+        canUndo: history.past.length > 0,
+        canRedo: history.future.length > 0,
+      }}
+    >
+      {children}
+    </StoreCtx.Provider>
+  );
 }
 
 export function useStore(): StoreValue {

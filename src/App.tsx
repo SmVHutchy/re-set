@@ -20,6 +20,8 @@ import {
   Heartbeat,
   MagnifyingGlass,
   Checks,
+  ArrowUUpLeft,
+  ArrowUUpRight,
 } from "@phosphor-icons/react";
 
 type Filter = Phase | "all" | "untagged";
@@ -64,7 +66,7 @@ async function loadCollection(): Promise<string> {
 }
 
 export function App() {
-  const { state, dispatch } = useStore();
+  const { state, dispatch, canUndo, canRedo } = useStore();
   const [tracks, setTracks] = useState<Track[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -94,6 +96,19 @@ export function App() {
       alive = false;
     };
   }, []);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const mod = e.metaKey || e.ctrlKey;
+      if (!mod || e.key.toLowerCase() !== "z") return;
+      const el = document.activeElement;
+      if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA")) return;
+      e.preventDefault();
+      dispatch({ type: e.shiftKey ? "redo" : "undo" });
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [dispatch]);
 
   const trackById = useMemo(() => {
     const m = new Map<string, Track>();
@@ -171,11 +186,21 @@ export function App() {
             <Heartbeat size={14} weight="regular" /> Health
           </ViewTab>
         </div>
-        {!loading && !error && (
-          <span className="ml-auto font-mono text-[12px] text-ink-soft">
-            {tracks.length} Tracks · {taggedCount} getaggt
-          </span>
-        )}
+        <div className="ml-auto flex items-center gap-2">
+          <div className="flex items-center gap-0.5">
+            <HeaderIconBtn label="Rückgängig (⌘Z)" disabled={!canUndo} onClick={() => dispatch({ type: "undo" })}>
+              <ArrowUUpLeft size={15} weight="regular" />
+            </HeaderIconBtn>
+            <HeaderIconBtn label="Wiederholen (⌘⇧Z)" disabled={!canRedo} onClick={() => dispatch({ type: "redo" })}>
+              <ArrowUUpRight size={15} weight="regular" />
+            </HeaderIconBtn>
+          </div>
+          {!loading && !error && (
+            <span className="font-mono text-[12px] text-ink-soft">
+              {tracks.length} Tracks · {taggedCount} getaggt
+            </span>
+          )}
+        </div>
       </header>
 
       {view === "library" ? (
@@ -346,6 +371,30 @@ function FilterChip({
       }}
     >
       {color && <span className="h-2 w-2 rounded-full" style={{ background: color }} aria-hidden="true" />}
+      {children}
+    </button>
+  );
+}
+
+function HeaderIconBtn({
+  label,
+  disabled,
+  onClick,
+  children,
+}: {
+  label: string;
+  disabled: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      aria-label={label}
+      title={label}
+      disabled={disabled}
+      onClick={onClick}
+      className="flex h-7 w-7 items-center justify-center rounded-md text-ink-soft transition-colors hover:bg-raise hover:text-ink active:translate-y-[1px] disabled:opacity-30 disabled:hover:bg-transparent"
+    >
       {children}
     </button>
   );

@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import type { Track } from "../lib/nml";
 import type { PersistState } from "../lib/store/types";
 import { EMPTY_TAGS, isTagged } from "../lib/store/types";
+import { PHASES, PHASE_COLOR, type Phase } from "../lib/tags";
 import { WarningCircle } from "@phosphor-icons/react";
 
 interface Props {
@@ -31,12 +32,20 @@ export function HealthView({ tracks, state, onPick }: Props) {
     const missingCover: Track[] = [];
     let untagged = 0;
     const byName = new Map<string, Track[]>();
+    const genres = new Map<string, number>();
+    const phaseCounts: Record<Phase, number> = { pre: 0, mid: 0, peak: 0, late: 0 };
+    const energyCounts = new Array(11).fill(0) as number[];
 
     for (const t of tracks) {
       if (!t.keyCamelot) missingKey.push(t);
       if (t.bpm == null) missingBpm.push(t);
       if (!t.coverPath) missingCover.push(t);
-      if (!isTagged(state.tags[t.id] ?? EMPTY_TAGS)) untagged++;
+      const tg = state.tags[t.id] ?? EMPTY_TAGS;
+      if (!isTagged(tg)) untagged++;
+      if (tg.phase) phaseCounts[tg.phase]++;
+      if (tg.energy != null) energyCounts[tg.energy]++;
+      const g = t.genre?.trim();
+      if (g) genres.set(g, (genres.get(g) ?? 0) + 1);
       const k = `${t.title.toLowerCase()}|${t.artist.toLowerCase()}`;
       const arr = byName.get(k) ?? [];
       arr.push(t);
@@ -44,8 +53,23 @@ export function HealthView({ tracks, state, onPick }: Props) {
     }
     const dupes = [...byName.values()].filter((g) => g.length > 1);
     const incomplete = tracks.filter((t) => !t.keyCamelot || t.bpm == null || !t.coverPath);
-    return { missingKey, missingBpm, missingCover, untagged, dupes, incomplete };
+    const topGenres = [...genres.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6);
+    return {
+      missingKey,
+      missingBpm,
+      missingCover,
+      untagged,
+      dupes,
+      incomplete,
+      phaseCounts,
+      energyCounts,
+      topGenres,
+    };
   }, [tracks, state]);
+
+  const maxPhase = Math.max(1, ...PHASES.map((p) => health.phaseCounts[p]));
+  const maxEnergy = Math.max(1, ...health.energyCounts);
+  const maxGenre = Math.max(1, ...health.topGenres.map(([, c]) => c));
 
   return (
     <div className="mt-7 flex flex-col gap-6">
@@ -57,6 +81,34 @@ export function HealthView({ tracks, state, onPick }: Props) {
         <Metric label="ungetaggt" value={health.untagged} />
         <Metric label="Duplikate" value={health.dupes.length} accent />
       </div>
+
+      <section className="rounded-lg border border-line bg-surface p-4">
+        <h2 className="mb-3 text-[14px] font-medium text-ink">Verteilung</h2>
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
+          <div>
+            <div className="mb-2 text-[12px] text-ink-soft">Phasen</div>
+            {PHASES.map((p) => (
+              <Bar key={p} label={p} value={health.phaseCounts[p]} max={maxPhase} color={PHASE_COLOR[p]} />
+            ))}
+          </div>
+          <div>
+            <div className="mb-2 text-[12px] text-ink-soft">Energie</div>
+            {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
+              <Bar key={n} label={`E${n}`} value={health.energyCounts[n]} max={maxEnergy} color="var(--color-accent)" />
+            ))}
+          </div>
+          <div>
+            <div className="mb-2 text-[12px] text-ink-soft">Top-Genres</div>
+            {health.topGenres.length === 0 ? (
+              <div className="text-[12px] text-ink-faint">—</div>
+            ) : (
+              health.topGenres.map(([g, c]) => (
+                <Bar key={g} label={g} value={c} max={maxGenre} color="var(--color-sig)" />
+              ))
+            )}
+          </div>
+        </div>
+      </section>
 
       {health.dupes.length > 0 && (
         <section className="rounded-lg border border-line bg-surface p-4">
@@ -123,6 +175,31 @@ export function HealthView({ tracks, state, onPick }: Props) {
           Alles sauber — keine Duplikate, keine fehlenden Keys/BPM/Cover.
         </div>
       )}
+    </div>
+  );
+}
+
+function Bar({
+  label,
+  value,
+  max,
+  color,
+}: {
+  label: string;
+  value: number;
+  max: number;
+  color: string;
+}) {
+  const pct = Math.round((value / max) * 100);
+  return (
+    <div className="mb-1 flex items-center gap-2">
+      <span className="w-16 flex-none truncate text-[11px] text-ink-soft" title={label}>
+        {label}
+      </span>
+      <div className="h-2 flex-1 overflow-hidden rounded-full bg-raise">
+        <div className="h-full rounded-full" style={{ width: `${pct}%`, background: color }} />
+      </div>
+      <span className="w-6 flex-none text-right font-mono text-[10px] text-ink-faint">{value}</span>
     </div>
   );
 }

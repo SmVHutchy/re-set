@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no" ?>
+<NML VERSION="19">
+<HEAD COMPANY="www.native-instruments.com" PROGRAM="Traktor"></HEAD>
+<MUSICFOLDERS></MUSICFOLDERS>
+<COLLECTION ENTRIES="20">
+  <ENTRY MODIFIED_DATE="2026/4/2" TITLE="Undertow" ARTIST="Vael">
+    <LOCATION DIR="/:Users/:r/:Music/:Sets/:" FILE="vael_undertow.aiff" VOLUME="Macintosh HD"></LOCATION>
+    <ALBUM TITLE="Undertow EP"></ALBUM>
+    <INFO BITRATE="1411000" GENRE="Melodic Techno" KEY="8A" PLAYTIME="392" RANKING="204"></INFO>
+    <TEMPO BPM="124.000000" BPM_QUALITY="100.000000"></TEMPO>
+    <MUSICAL_KEY VALUE="21"></MUSICAL_KEY>
+  </ENTRY>
+  <ENTRY MODIFIED_DATE="2026/3/19" TITLE="Half Light" ARTIST="Noctilume">
+    <LOCATION DIR="/:Users/:r/:Music/:Sets/:" FILE="noctilume_half_light.aiff" VOLUME="Macintosh HD"></LOCATION>
+    <INFO GENRE="Melodic Techno" PLAYTIME="408" RANKING="153"></INFO>
+    <TEMPO BPM="122.000000" BPM_QUALITY="100.000000"></TEMPO>
+    <MUSICAL_KEY VALUE="16"></MUSICAL_KEY>
+  </ENTRY>
+  <ENTRY MODIFIED_DATE="2026/4/11" TITLE="Caldera" ARTIST="Hadron Drift">
+    <LOCATION DIR="/:Users/:r/:Music/:Sets/:" FILE="hadrondrift_caldera.aiff" VOLUME="Macintosh HD"></LOCATION>
+    <INFO GENRE="Peak Time Techno" PLAYTIME="365" RANKING="255"></INFO>
+    <TEMPO BPM="130.000000" BPM_QUALITY="100.000000"></TEMPO>
+    <MUSICAL_KEY VALUE="18"></MUSICAL_KEY>
+  </ENTRY>
+  <ENTRY MODIFIED_DATE="2026/2/28" TITLE="Nightporter" ARTIST="Kessler">
+    <LOCATION DIR="/:Users/:r/:Music/:Sets/:" FILE="kessler_nightporter.aiff" VOLUME="Macintosh HD"></LOCATION>
+    <INFO GENRE="Melodic House" PLAYTIME="421" RANKING="102"></INFO>
+    <TEMPO BPM="121.000000" BPM_QUALITY="100.000000"></TEMPO>
+    <MUSICAL_KEY VALUE="13"></MUSICAL_KEY>
+  </ENTRY>
+  <ENTRY MODIFIED_DATE="2026/1/14" TITLE="Sel" ARTIST="Maree">
+    <LOCATION DIR="/:Users/:r/:Music/:Sets/:" FILE="maree_sel.aiff" VOLUME="Macintosh HD"></LOCATION>
+    <INFO GENRE="Organic House" PLAYTIME="447" RANKING="153"></INFO>
+    <TEMPO BPM="120.000000" BPM_QUALITY="100.000000"></TEMPO>
+    <MUSICAL_KEY VALUE="9"></MUSICAL_KEY>
+  </ENTRY>
+  <ENTRY MODIFIED_DATE="2026/4/22" TITLE="Eisgang" ARTIST="Bruenn">
+    <LOCATION DIR="/:Users/:r/:Music/:Sets/:" FILE="bruenn_eisgang.aiff" VOLUME="Macintosh HD"></LOCATION>
+    <INFO GENRE="Hypnotic Techno" PLAYTIME="498" RANKING="204"></INFO>
+    <TEMPO BPM="132.000000" BPM_QUALITY="100.000000"></TEMPO>
+    <MUSICAL_KEY VALUE="23"></MUSICAL_KEY>
+  </ENTRY>
+  <ENTRY MODIFIED_DATE="2026/3/2" TITLE="Drift Theory" ARTIST="Sable Court">
+    <LOCATION DIR="/:Users/:r/:Music/:Sets/:" FILE="sablecourt_drift_theory.aiff" VOLUME="Macintosh HD"></LOCATION>
+    <INFO GENRE="Melodic Techno" PLAYTIME="377" RANKING="153"></INFO>
+    <TEMPO BPM="125.000000" BPM_QUALITY="100.000000"></TEMPO>
+    <MUSICAL_KEY VALUE="19"></MUSICAL_KEY>
+  </ENTRY>
+  <ENTRY MODIFIED_DATE="2026/2/9" TITLE="Mwezi" ARTIST="Oroko">
+    <LOCATION DIR="/:Users/:r/:Music/:Sets/:" FILE="oroko_mwezi.aiff" VOLUME="Macintosh HD"></LOCATION>
+    <INFO GENRE="Afro House" KEY="9B" PLAYTIME="433" RANKING="204"></INFO>
+    <TEMPO BPM="123.000000" BPM_QUALITY="100.000000"></TEMPO>
+    <MUSICAL_KEY VALUE="7"></MUSICAL_KEY>
+  </ENTRY>
+  <ENTRY MODIFIED_DATE="2026/1/30" TITLE="Static Bloom" ARTIST="Latchkey">
+    <LOCATION DIR="/:Users/:r/:Music/:Sets/:" FILE="latchkey_static_bloom.aiff" VOLUME="Macintosh HD"></LOCATION>
+    <INFO GENRE="Indie Dance" PLAYTIME="356" RANKING="102"></INFO>
+    <TEMPO BPM="119.000000" BPM_QUALITY="100.000000"></TEMPO>
+    <MUSICAL_KEY VALUE="4"></MUSICAL_KEY>
+  </ENTRY>
+  <ENTRY MODIFIED_DATE="2026/3/27" TITLE="Pelagic" ARTIST="Vessel North">
+    <LOCATION DIR="/:Users/:r/:Music/:Sets/:" FILE="vesselnorth_pelagic.aiff" VOLUME="Macintosh HD"></LOCATION>
+    <INFO GENRE="Progressive House" PLAYTIME="462" RANKING="255"></INFO>
+    <TEMPO BPM="126.000000" BPM_QUALITY="100.000000"></TEMPO>
+    <MUSICAL_KEY VALUE="14"></MUSICAL_KEY>
+  </ENTRY>
+  <ENTRY MODIFIED_DATE="2026/4/5" TITLE="Tideline" ARTIST="Coriol">
+    <LOCATION DIR="/:Users/:r/:Music/:Sets/:" FILE="coriol_tideline.aiff" VOLUME="Macintosh HD"></LOCATION>
+    <INFO GENRE="Melodic Techno" PLAYTIME="388" RANKING="153"></INFO>
+    <TEMPO BPM="124.000000" BPM_QUALITY="100.000000"></TEMPO>
+    <MUSICAL_KEY VALUE="20"></MUSICAL_KEY>
+  </ENTRY>
+  <ENTRY MODIFIED_DATE="2026/4/18" TITLE="Ashfield" ARTIST="Dunmore">
+    <LOCATION DIR="/:Users/:r/:Music/:Sets/:" FILE="dunmore_ashfield.aiff" VOLUME="Macintosh HD"></LOCATION>
+    <INFO GENRE="Peak Time Techno" PLAYTIME="341" RANKING="204"></INFO>
+    <TEMPO BPM="131.000000" BPM_QUALITY="100.000000"></TEMPO>
+    <MUSICAL_KEY VALUE="22"></MUSICAL_KEY>
+  </ENTRY>
+  <ENTRY MODIFIED_DATE="2026/2/17" TITLE="Mirrorpool" ARTIST="Halcyon Reef">
+    <LOCATION DIR="/:Users/:r/:Music/:Sets/:" FILE="halcyonreef_mirrorpool.aiff" VOLUME="Macintosh HD"></LOCATION>
+    <INFO GENRE="Deep House" PLAYTIME="414" RANKING="102"></INFO>
+    <TEMPO BPM="122.000000" BPM_QUALITY="100.000000"></TEMPO>
+    <MUSICAL_KEY VALUE="5"></MUSICAL_KEY>
+  </ENTRY>
+  <ENTRY MODIFIED_DATE="2026/3/11" TITLE="Halt" ARTIST="Moric">
+    <LOCATION DIR="/:Users/:r/:Music/:Sets/:" FILE="moric_halt.aiff" VOLUME="Macintosh HD"></LOCATION>
+    <INFO GENRE="Hypnotic Techno" PLAYTIME="476" RANKING="153"></INFO>
+    <TEMPO BPM="128.000000" BPM_QUALITY="100.000000"></TEMPO>
+    <MUSICAL_KEY VALUE="17"></MUSICAL_KEY>
+  </ENTRY>
+  <ENTRY MODIFIED_DATE="2026/4/25" TITLE="Pyre" ARTIST="Sundering">
+    <LOCATION DIR="/:Users/:r/:Music/:Sets/:" FILE="sundering_pyre.aiff" VOLUME="Macintosh HD"></LOCATION>
+    <INFO GENRE="Peak Time Techno" KEY="10B" PLAYTIME="333" RANKING="255"></INFO>
+    <TEMPO BPM="132.000000" BPM_QUALITY="100.000000"></TEMPO>
+    <MUSICAL_KEY VALUE="2"></MUSICAL_KEY>
+  </ENTRY>
+  <ENTRY MODIFIED_DATE="2026/1/22" TITLE="Vow" ARTIST="Pale Cohort">
+    <LOCATION DIR="/:Users/:r/:Music/:Sets/:" FILE="palecohort_vow.aiff" VOLUME="Macintosh HD"></LOCATION>
+    <INFO GENRE="Melodic Techno" PLAYTIME="401" RANKING="153"></INFO>
+    <TEMPO BPM="125.000000" BPM_QUALITY="100.000000"></TEMPO>
+    <MUSICAL_KEY VALUE="11"></MUSICAL_KEY>
+  </ENTRY>
+  <ENTRY MODIFIED_DATE="2026/2/3" TITLE="Parallax" ARTIST="Astrolab">
+    <LOCATION DIR="/:Users/:r/:Music/:Sets/:" FILE="astrolab_parallax.aiff" VOLUME="Macintosh HD"></LOCATION>
+    <INFO GENRE="Progressive House" PLAYTIME="455" RANKING="204"></INFO>
+    <TEMPO BPM="123.000000" BPM_QUALITY="100.000000"></TEMPO>
+    <MUSICAL_KEY VALUE="0"></MUSICAL_KEY>
+  </ENTRY>
+  <ENTRY MODIFIED_DATE="2026/1/8" TITLE="Kettle Hill" ARTIST="Renn">
+    <LOCATION DIR="/:Users/:r/:Music/:Sets/:" FILE="renn_kettle_hill.aiff" VOLUME="Macintosh HD"></LOCATION>
+    <INFO GENRE="Organic House" PLAYTIME="438" RANKING="102"></INFO>
+    <TEMPO BPM="120.000000" BPM_QUALITY="100.000000"></TEMPO>
+    <MUSICAL_KEY VALUE="12"></MUSICAL_KEY>
+  </ENTRY>
+  <ENTRY MODIFIED_DATE="2026/3/30" TITLE="Crosswire" ARTIST="Votta">
+    <LOCATION DIR="/:Users/:r/:Music/:Sets/:" FILE="votta_crosswire.aiff" VOLUME="Macintosh HD"></LOCATION>
+    <INFO GENRE="Melodic Techno" PLAYTIME="384" RANKING="153"></INFO>
+    <TEMPO BPM="127.000000" BPM_QUALITY="100.000000"></TEMPO>
+    <MUSICAL_KEY VALUE="15"></MUSICAL_KEY>
+  </ENTRY>
+  <ENTRY MODIFIED_DATE="2026/2/21" TITLE="Lantern" ARTIST="Quill and Drone">
+    <LOCATION DIR="/:Users/:r/:Music/:Sets/:" FILE="quillanddrone_lantern.aiff" VOLUME="Macintosh HD"></LOCATION>
+    <INFO GENRE="Indie Dance" PLAYTIME="369" RANKING="102"></INFO>
+    <TEMPO BPM="118.000000" BPM_QUALITY="100.000000"></TEMPO>
+    <MUSICAL_KEY VALUE="6"></MUSICAL_KEY>
+  </ENTRY>
+</COLLECTION>
+</NML>

@@ -1,0 +1,69 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Geist", system-ui, -apple-system, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, "SF Mono", monospace;
+
+  /* Neutrale — warmes Graphit (PFLICHTENHEFT §15.1) */
+  --color-base: #14130f;
+  --color-surface: #1c1a15;
+  --color-raise: #24211a;
+  --color-line: #2e2a22;
+  --color-line-strong: #3c372d;
+  --color-ink: #f1efea;
+  --color-ink-soft: #aca69c;
+  --color-ink-faint: #7c766c;
+
+  /* Brand-Akzent — Cue-Magenta */
+  --color-accent: #ec5e8e;
+  --color-accent-strong: #d54a78;
+  --color-accent-soft: #3b1f2b;
+
+  /* Kompatibilität — Cyan-Signal */
+  --color-sig: #45d2d6;
+  --color-sig-dim: #5c9396;
+
+  /* Energie-Phasen — Thermal-Ramp */
+  --color-phase-pre: #6e84a6;
+  --color-phase-mid: #8a77c6;
+  --color-phase-peak: #ed6a57;
+  --color-phase-late: #b68f68;
+}
+
+:root {
+  color-scheme: dark;
+}
+
+html {
+  overflow-x: clip;
+}
+
+body {
+  margin: 0;
+  min-height: 100dvh;
+  background: var(--color-base);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  overflow-x: clip;
+  -webkit-font-smoothing: antialiased;
+}
+
+@keyframes sf-shimmer {
+  0% {
+    background-position: -180% 0;
+  }
+  100% {
+    background-position: 180% 0;
+  }
+}
+
+.sf-skeleton {
+  background: linear-gradient(
+    100deg,
+    var(--color-surface) 30%,
+    var(--color-raise) 50%,
+    var(--color-surface) 70%
+  );
+  background-size: 200% 100%;
+  animation: sf-shimmer 1.4s ease-in-out infinite;
+}

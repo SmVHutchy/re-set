@@ -1,16 +1,22 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { parseNml, type Track } from "./lib/nml";
-import { demoTags, PHASES, PHASE_COLOR, type Phase } from "./lib/tags";
+import { PHASES, PHASE_COLOR, type Phase } from "./lib/tags";
+import { useStore, getTags, activeSet } from "./lib/store/StoreProvider";
+import { isTagged } from "./lib/store/types";
 import { CoverWall } from "./components/CoverWall";
+import { Inspector } from "./components/Inspector";
+import { SetPanel } from "./components/SetPanel";
 import { Waveform } from "@phosphor-icons/react";
 
-type Filter = Phase | "all";
+type Filter = Phase | "all" | "untagged";
 
 export function App() {
+  const { state, dispatch } = useStore();
   const [tracks, setTracks] = useState<Track[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<Filter>("all");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -34,10 +40,32 @@ export function App() {
     };
   }, []);
 
+  const trackById = useMemo(() => {
+    const m = new Map<string, Track>();
+    for (const t of tracks) m.set(t.id, t);
+    return m;
+  }, [tracks]);
+
+  const setIds = useMemo(() => new Set(activeSet(state).trackIds), [state]);
+
+  const taggedCount = useMemo(
+    () => tracks.reduce((n, t) => n + (isTagged(getTags(state, t.id)) ? 1 : 0), 0),
+    [tracks, state],
+  );
+
   const shown = useMemo(() => {
     if (filter === "all") return tracks;
-    return tracks.filter((t) => demoTags(t.id).phase === filter);
-  }, [tracks, filter]);
+    if (filter === "untagged") return tracks.filter((t) => !isTagged(getTags(state, t.id)));
+    return tracks.filter((t) => getTags(state, t.id).phase === filter);
+  }, [tracks, filter, state]);
+
+  const onSelect = useCallback((id: string) => setSelectedId(id), []);
+  const onAdd = useCallback(
+    (id: string) => dispatch({ type: "addToSet", trackId: id }),
+    [dispatch],
+  );
+
+  const selectedTrack = selectedId ? trackById.get(selectedId) ?? null : null;
 
   return (
     <div className="mx-auto min-h-[100dvh] w-full max-w-[1400px] px-4 py-7 sm:px-8 sm:py-10">
@@ -46,12 +74,10 @@ export function App() {
           <Waveform size={20} weight="regular" className="text-accent" />
           SetForge
         </h1>
-        <span className="text-[13px] text-ink-faint">
-          Cover-Wall · AP0-Prototyp
-        </span>
+        <span className="text-[13px] text-ink-faint">Library &amp; Set-Planung</span>
         {!loading && !error && (
           <span className="ml-auto font-mono text-[12px] text-ink-soft">
-            {tracks.length} Tracks · {new Set(tracks.map((t) => t.keyCamelot).filter(Boolean)).size} Keys
+            {tracks.length} Tracks · {taggedCount} getaggt
           </span>
         )}
       </header>
@@ -61,24 +87,42 @@ export function App() {
           alle
         </FilterChip>
         {PHASES.map((p) => (
-          <FilterChip
-            key={p}
-            active={filter === p}
-            color={PHASE_COLOR[p]}
-            onClick={() => setFilter(p)}
-          >
+          <FilterChip key={p} active={filter === p} color={PHASE_COLOR[p]} onClick={() => setFilter(p)}>
             {p}
           </FilterChip>
         ))}
+        <FilterChip active={filter === "untagged"} onClick={() => setFilter("untagged")}>
+          ungetaggt
+        </FilterChip>
       </nav>
 
-      <main className="mt-7">
-        <CoverWall tracks={shown} loading={loading} error={error} />
-      </main>
+      <div className="mt-7 grid grid-cols-1 gap-8 lg:grid-cols-[1fr_340px]">
+        <main>
+          <CoverWall
+            tracks={shown}
+            state={state}
+            setIds={setIds}
+            selectedId={selectedId}
+            loading={loading}
+            error={error}
+            onSelect={onSelect}
+            onAdd={onAdd}
+          />
+        </main>
+
+        <aside className="flex flex-col gap-6 self-start lg:sticky lg:top-6">
+          <Inspector
+            track={selectedTrack}
+            tags={selectedTrack ? getTags(state, selectedTrack.id) : { energy: null, phase: null, vibe: [] }}
+            inSet={selectedTrack ? setIds.has(selectedTrack.id) : false}
+          />
+          <SetPanel state={state} trackById={trackById} onSelect={onSelect} />
+        </aside>
+      </div>
 
       <footer className="mt-12 border-t border-line pt-4 text-[11px] text-ink-faint">
-        Phasen/Energie sind hier deterministische Demo-Werte, bis echtes Tagging steht
-        (PFLICHTENHEFT FA-6). Key &amp; BPM kommen real aus der collection.nml.
+        Tags &amp; Sets liegen lokal (localStorage), bleiben über Reloads erhalten — später SQLite.
+        Key &amp; BPM kommen real aus der collection.nml; Kompatibilität = Harmonik + Tempo + Energie (§7.1).
       </footer>
     </div>
   );
@@ -105,13 +149,7 @@ function FilterChip({
         color: active ? "var(--color-ink)" : "var(--color-ink-soft)",
       }}
     >
-      {color && (
-        <span
-          className="h-2 w-2 rounded-full"
-          style={{ background: color }}
-          aria-hidden="true"
-        />
-      )}
+      {color && <span className="h-2 w-2 rounded-full" style={{ background: color }} aria-hidden="true" />}
       {children}
     </button>
   );

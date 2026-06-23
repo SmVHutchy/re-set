@@ -6,9 +6,11 @@ import { isTagged } from "./lib/store/types";
 import { CoverWall } from "./components/CoverWall";
 import { Inspector } from "./components/Inspector";
 import { SetPanel } from "./components/SetPanel";
-import { Waveform } from "@phosphor-icons/react";
+import { EnergyTimeline } from "./components/EnergyTimeline";
+import { Waveform, GridFour, WaveSine } from "@phosphor-icons/react";
 
 type Filter = Phase | "all" | "untagged";
+type View = "library" | "timeline";
 
 export function App() {
   const { state, dispatch } = useStore();
@@ -17,6 +19,7 @@ export function App() {
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<Filter>("all");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [view, setView] = useState<View>("library");
 
   useEffect(() => {
     let alive = true;
@@ -74,7 +77,14 @@ export function App() {
           <Waveform size={20} weight="regular" className="text-accent" />
           SetForge
         </h1>
-        <span className="text-[13px] text-ink-faint">Library &amp; Set-Planung</span>
+        <div className="flex items-center gap-0.5 rounded-md border border-line p-0.5">
+          <ViewTab active={view === "library"} onClick={() => setView("library")}>
+            <GridFour size={14} weight="regular" /> Library
+          </ViewTab>
+          <ViewTab active={view === "timeline"} onClick={() => setView("timeline")}>
+            <WaveSine size={14} weight="regular" /> Timeline
+          </ViewTab>
+        </div>
         {!loading && !error && (
           <span className="ml-auto font-mono text-[12px] text-ink-soft">
             {tracks.length} Tracks · {taggedCount} getaggt
@@ -82,43 +92,63 @@ export function App() {
         )}
       </header>
 
-      <nav className="mt-6 flex flex-wrap items-center gap-2">
-        <FilterChip active={filter === "all"} onClick={() => setFilter("all")}>
-          alle
-        </FilterChip>
-        {PHASES.map((p) => (
-          <FilterChip key={p} active={filter === p} color={PHASE_COLOR[p]} onClick={() => setFilter(p)}>
-            {p}
-          </FilterChip>
-        ))}
-        <FilterChip active={filter === "untagged"} onClick={() => setFilter("untagged")}>
-          ungetaggt
-        </FilterChip>
-      </nav>
+      {view === "library" ? (
+        <>
+          <nav className="mt-6 flex flex-wrap items-center gap-2">
+            <FilterChip active={filter === "all"} onClick={() => setFilter("all")}>
+              alle
+            </FilterChip>
+            {PHASES.map((p) => (
+              <FilterChip key={p} active={filter === p} color={PHASE_COLOR[p]} onClick={() => setFilter(p)}>
+                {p}
+              </FilterChip>
+            ))}
+            <FilterChip active={filter === "untagged"} onClick={() => setFilter("untagged")}>
+              ungetaggt
+            </FilterChip>
+          </nav>
 
-      <div className="mt-7 grid grid-cols-1 gap-8 lg:grid-cols-[1fr_340px]">
-        <main>
-          <CoverWall
-            tracks={shown}
+          <div className="mt-7 grid grid-cols-1 gap-8 lg:grid-cols-[1fr_340px]">
+            <main>
+              <CoverWall
+                tracks={shown}
+                state={state}
+                setIds={setIds}
+                selectedId={selectedId}
+                loading={loading}
+                error={error}
+                onSelect={onSelect}
+                onAdd={onAdd}
+              />
+            </main>
+
+            <aside className="flex flex-col gap-6 self-start lg:sticky lg:top-6">
+              <Inspector
+                track={selectedTrack}
+                tags={selectedTrack ? getTags(state, selectedTrack.id) : { energy: null, phase: null, vibe: [] }}
+                inSet={selectedTrack ? setIds.has(selectedTrack.id) : false}
+              />
+              <SetPanel state={state} trackById={trackById} onSelect={onSelect} />
+            </aside>
+          </div>
+        </>
+      ) : (
+        <div className="mt-7 flex flex-col gap-6">
+          <EnergyTimeline
             state={state}
-            setIds={setIds}
+            trackById={trackById}
             selectedId={selectedId}
-            loading={loading}
-            error={error}
             onSelect={onSelect}
-            onAdd={onAdd}
           />
-        </main>
-
-        <aside className="flex flex-col gap-6 self-start lg:sticky lg:top-6">
-          <Inspector
-            track={selectedTrack}
-            tags={selectedTrack ? getTags(state, selectedTrack.id) : { energy: null, phase: null, vibe: [] }}
-            inSet={selectedTrack ? setIds.has(selectedTrack.id) : false}
-          />
-          <SetPanel state={state} trackById={trackById} onSelect={onSelect} />
-        </aside>
-      </div>
+          <div className="lg:max-w-md">
+            <Inspector
+              track={selectedTrack}
+              tags={selectedTrack ? getTags(state, selectedTrack.id) : { energy: null, phase: null, vibe: [] }}
+              inSet={selectedTrack ? setIds.has(selectedTrack.id) : false}
+            />
+          </div>
+        </div>
+      )}
 
       <footer className="mt-12 border-t border-line pt-4 text-[11px] text-ink-faint">
         Tags &amp; Sets liegen lokal (localStorage), bleiben über Reloads erhalten — später SQLite.
@@ -150,6 +180,29 @@ function FilterChip({
       }}
     >
       {color && <span className="h-2 w-2 rounded-full" style={{ background: color }} aria-hidden="true" />}
+      {children}
+    </button>
+  );
+}
+
+function ViewTab({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className="flex items-center gap-1.5 rounded-[6px] px-2.5 py-1 text-[12px] font-medium transition-colors"
+      style={{
+        background: active ? "var(--color-raise)" : "transparent",
+        color: active ? "var(--color-ink)" : "var(--color-ink-soft)",
+      }}
+    >
       {children}
     </button>
   );

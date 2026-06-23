@@ -15,7 +15,7 @@ function freshSet(name: string): DJSet {
 
 export function defaultState(): PersistState {
   const set = freshSet("Set 1");
-  return { tags: {}, sets: [set], activeSetId: set.id };
+  return { tags: {}, sets: [set], activeSetId: set.id, smartCrates: [] };
 }
 
 function normalize(raw: unknown): PersistState {
@@ -28,7 +28,8 @@ function normalize(raw: unknown): PersistState {
     r.activeSetId && sets.some((s) => s.id === r.activeSetId)
       ? r.activeSetId
       : sets[0].id;
-  return { tags, sets, activeSetId };
+  const smartCrates = Array.isArray(r.smartCrates) ? r.smartCrates : [];
+  return { tags, sets, activeSetId, smartCrates };
 }
 
 export function loadState(): PersistState {

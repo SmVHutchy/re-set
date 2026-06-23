@@ -18,10 +18,26 @@ export interface DJSet {
   positions?: Record<string, CanvasPos>; // Set-Canvas Kartenpositionen
 }
 
+export type CrateField = "phase" | "energy" | "bpm" | "key" | "genre" | "vibe" | "text";
+export type CrateOp = "is" | "gte" | "lte" | "contains" | "has";
+
+export interface CrateRule {
+  field: CrateField;
+  op: CrateOp;
+  value: string;
+}
+
+export interface SmartCrate {
+  id: string;
+  name: string;
+  rules: CrateRule[];
+}
+
 export interface PersistState {
   tags: Record<string, TrackTags>;
   sets: DJSet[];
   activeSetId: string | null;
+  smartCrates: SmartCrate[];
 }
 
 export const EMPTY_TAGS: TrackTags = { energy: null, phase: null, vibe: [] };

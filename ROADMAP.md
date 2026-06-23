@@ -12,10 +12,11 @@ Detaillierte Historie: `git log --oneline`.
 - [x] **Set-Canvas** · freie Cover-Fläche, Karten frei ziehen, Verbindungslinien in Set-Reihenfolge
 - [x] **Feinschliff-Runde** · Typo selbst gehostet (Geist, tabular numerals) · Set-Verwaltung (wechseln/duplizieren/löschen + Dauer) · Suche + Sortierung · Batch-Tagging · Audio-Preview mit Wellenform
 
+- [x] **Drag & Drop** im Set + **Tracklist-Export** (.m3u / Text kopieren)
+- [x] **Editor- & Ordnungs-Runde** · Timeline-Auto-Order (Harmonize) + Energie an der Kurve ziehen · Canvas Cluster-Zonen (Drop taggt Phase) + harmonische Nachbarn · Library-Health (fehlende Keys/BPM/Cover, Duplikate) · Smart-Crates (Regel-Playlists)
+
 ## Als Nächstes (Vorschläge)
 - [ ] **Cover-Wall-Virtualisierung** — flüssig bis 5.000+ Tracks
-- [ ] **Drag & Drop** im Set statt Hoch/Runter-Buttons
-- [ ] **Tracklist-Export** (.m3u / Text kopieren)
 - [ ] **AP3 — Write-Back nach Traktor** — braucht Rust/Tauri-Shell (Backup, Dry-Run)
 
 ## Bekannte Platzhalter

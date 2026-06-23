@@ -4,8 +4,8 @@ import type { PersistState } from "../lib/store/types";
 import { EMPTY_TAGS } from "../lib/store/types";
 import { useStore, activeSet } from "../lib/store/StoreProvider";
 import { compatibility, COMPAT_COLOR } from "../lib/compat";
-import { PHASE_COLOR } from "../lib/tags";
-import { ArrowsOut } from "@phosphor-icons/react";
+import { PHASES, PHASE_COLOR } from "../lib/tags";
+import { ArrowsOut, Columns } from "@phosphor-icons/react";
 
 const HEIGHT = 460;
 const CARD = 84;
@@ -38,8 +38,12 @@ export function SetCanvas({ state, trackById, selectedId, onSelect }: Props) {
 
   const boardRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(800);
+  const [zonesOn, setZonesOn] = useState(false);
   const [drag, setDrag] = useState<{ id: string; x: number; y: number } | null>(null);
   const grab = useRef<{ id: string; dx: number; dy: number; sx: number; sy: number; moved: boolean } | null>(null);
+
+  const tagsOf = (tr: Track) => state.tags[tr.id] ?? EMPTY_TAGS;
+  const selectedTrack = selectedId ? trackById.get(selectedId) ?? null : null;
 
   useEffect(() => {
     if (!boardRef.current) return;
@@ -88,7 +92,13 @@ export function SetCanvas({ state, trackById, selectedId, onSelect }: Props) {
     const g = grab.current;
     if (g) {
       if (!g.moved) onSelect(g.id);
-      else if (drag) dispatch({ type: "moveCard", trackId: g.id, x: drag.x, y: drag.y });
+      else if (drag) {
+        dispatch({ type: "moveCard", trackId: g.id, x: drag.x, y: drag.y });
+        if (zonesOn) {
+          const zi = Math.min(3, Math.max(0, Math.floor(((drag.x + CARD / 2) / width) * 4)));
+          dispatch({ type: "setPhase", id: g.id, phase: PHASES[zi] });
+        }
+      }
     }
     grab.current = null;
     setDrag(null);
@@ -104,12 +114,24 @@ export function SetCanvas({ state, trackById, selectedId, onSelect }: Props) {
       <header className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <h2 className="text-[15px] font-medium text-ink">{set.name}</h2>
         <span className="font-mono text-[12px] text-ink-faint">{items.length} Tracks</span>
-        <button
-          onClick={() => dispatch({ type: "clearLayout" })}
-          className="ml-auto flex items-center gap-1.5 rounded-md border border-line px-2 py-1 text-[12px] text-ink-soft transition-colors active:translate-y-[1px]"
-        >
-          <ArrowsOut size={13} weight="regular" /> Auto-Layout
-        </button>
+        <div className="ml-auto flex items-center gap-2">
+          <button
+            onClick={() => setZonesOn((z) => !z)}
+            className="flex items-center gap-1.5 rounded-md border px-2 py-1 text-[12px] transition-colors active:translate-y-[1px]"
+            style={{
+              borderColor: zonesOn ? "var(--color-accent)" : "var(--color-line)",
+              color: zonesOn ? "var(--color-accent)" : "var(--color-ink-soft)",
+            }}
+          >
+            <Columns size={13} weight="regular" /> Zonen
+          </button>
+          <button
+            onClick={() => dispatch({ type: "clearLayout" })}
+            className="flex items-center gap-1.5 rounded-md border border-line px-2 py-1 text-[12px] text-ink-soft transition-colors active:translate-y-[1px]"
+          >
+            <ArrowsOut size={13} weight="regular" /> Auto-Layout
+          </button>
+        </div>
       </header>
 
       <div
@@ -121,6 +143,23 @@ export function SetCanvas({ state, trackById, selectedId, onSelect }: Props) {
             "repeating-linear-gradient(0deg, transparent 0 28px, color-mix(in oklab, var(--color-line) 30%, transparent) 28px 29px), repeating-linear-gradient(90deg, transparent 0 28px, color-mix(in oklab, var(--color-line) 30%, transparent) 28px 29px), var(--color-base)",
         }}
       >
+        {zonesOn &&
+          PHASES.map((p, i) => (
+            <div
+              key={p}
+              className="pointer-events-none absolute bottom-0 top-0 flex justify-center pt-1.5"
+              style={{
+                left: `${i * 25}%`,
+                width: "25%",
+                borderLeft: i ? "1px dashed var(--color-line)" : "none",
+                background: `color-mix(in oklab, ${PHASE_COLOR[p]} 7%, transparent)`,
+              }}
+            >
+              <span className="text-[10px] font-medium" style={{ color: PHASE_COLOR[p] }}>
+                {p}
+              </span>
+            </div>
+          ))}
         {items.length === 0 ? (
           <div className="flex h-full items-center justify-center px-6 text-center text-[13px] text-ink-soft">
             Leeres Set — füge in Library Tracks hinzu, dann ordne sie hier frei an.
@@ -158,6 +197,10 @@ export function SetCanvas({ state, trackById, selectedId, onSelect }: Props) {
               const tags = state.tags[t.id] ?? EMPTY_TAGS;
               const phaseColor = tags.phase ? PHASE_COLOR[tags.phase] : null;
               const selected = t.id === selectedId;
+              const compatible =
+                selectedTrack && t.id !== selectedId
+                  ? compatibility(selectedTrack, t, tagsOf(selectedTrack), tags).level === "ok"
+                  : false;
               return (
                 <div
                   key={t.id}
@@ -172,8 +215,16 @@ export function SetCanvas({ state, trackById, selectedId, onSelect }: Props) {
                     style={{
                       width: CARD,
                       height: CARD,
-                      borderColor: selected ? "var(--color-accent)" : "var(--color-line)",
-                      boxShadow: selected ? "0 0 0 1px var(--color-accent)" : "none",
+                      borderColor: selected
+                        ? "var(--color-accent)"
+                        : compatible
+                          ? "var(--color-sig)"
+                          : "var(--color-line)",
+                      boxShadow: selected
+                        ? "0 0 0 1px var(--color-accent)"
+                        : compatible
+                          ? "0 0 0 1px var(--color-sig)"
+                          : "none",
                       background: phaseColor
                         ? `radial-gradient(120% 120% at 70% 15%, color-mix(in oklab, ${phaseColor} 42%, var(--color-base)) 0%, var(--color-base) 75%)`
                         : "var(--color-raise)",

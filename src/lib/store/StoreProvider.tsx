@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useReducer } from "react";
 import type { Phase } from "../tags";
-import type { DJSet, PersistState, TrackTags } from "./types";
+import type { DJSet, PersistState, TrackTags, SmartCrate } from "./types";
 import { EMPTY_TAGS } from "./types";
 import { loadState, newId, saveState } from "./storage";
 
@@ -12,6 +12,7 @@ type Action =
   | { type: "addToSet"; trackId: string }
   | { type: "removeFromSet"; index: number }
   | { type: "moveInSet"; index: number; dir: -1 | 1 }
+  | { type: "reorderInSet"; from: number; to: number }
   | { type: "renameSet"; name: string }
   | { type: "newSet" }
   | { type: "selectSet"; id: string }
@@ -22,7 +23,10 @@ type Action =
   | { type: "batchSetPhase"; ids: string[]; phase: Phase | null }
   | { type: "batchSetEnergy"; ids: string[]; energy: number | null }
   | { type: "batchAddVibe"; ids: string[]; vibe: string }
-  | { type: "batchAddToSet"; ids: string[] };
+  | { type: "batchAddToSet"; ids: string[] }
+  | { type: "replaceSetOrder"; ids: string[] }
+  | { type: "addSmartCrate"; crate: SmartCrate }
+  | { type: "deleteSmartCrate"; id: string };
 
 function patchTags(
   state: PersistState,
@@ -78,6 +82,14 @@ function reducer(state: PersistState, action: Action): PersistState {
         if (j < 0 || j >= s.trackIds.length) return s;
         const ids = s.trackIds.slice();
         [ids[action.index], ids[j]] = [ids[j], ids[action.index]];
+        return { ...s, trackIds: ids };
+      });
+    case "reorderInSet":
+      return withActiveSet(state, (s) => {
+        const ids = [...s.trackIds];
+        const [moved] = ids.splice(action.from, 1);
+        if (moved === undefined) return s;
+        ids.splice(action.to, 0, moved);
         return { ...s, trackIds: ids };
       });
     case "renameSet":
@@ -139,6 +151,15 @@ function reducer(state: PersistState, action: Action): PersistState {
         const add = action.ids.filter((id) => !s.trackIds.includes(id));
         return add.length ? { ...s, trackIds: [...s.trackIds, ...add] } : s;
       });
+    case "replaceSetOrder":
+      return withActiveSet(state, (s) => {
+        const valid = action.ids.filter((id) => s.trackIds.includes(id));
+        return valid.length === s.trackIds.length ? { ...s, trackIds: valid } : s;
+      });
+    case "addSmartCrate":
+      return { ...state, smartCrates: [...state.smartCrates, action.crate] };
+    case "deleteSmartCrate":
+      return { ...state, smartCrates: state.smartCrates.filter((c) => c.id !== action.id) };
     default:
       return state;
   }

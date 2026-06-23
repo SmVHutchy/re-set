@@ -9,10 +9,21 @@ import { SetPanel } from "./components/SetPanel";
 import { EnergyTimeline } from "./components/EnergyTimeline";
 import { SetCanvas } from "./components/SetCanvas";
 import { BatchBar } from "./components/BatchBar";
-import { Waveform, GridFour, WaveSine, Graph, MagnifyingGlass, Checks } from "@phosphor-icons/react";
+import { SmartCratesBar } from "./components/SmartCratesBar";
+import { HealthView } from "./components/HealthView";
+import { crateMatches } from "./lib/smartcrate";
+import {
+  Waveform,
+  GridFour,
+  WaveSine,
+  Graph,
+  Heartbeat,
+  MagnifyingGlass,
+  Checks,
+} from "@phosphor-icons/react";
 
 type Filter = Phase | "all" | "untagged";
-type View = "library" | "timeline" | "canvas";
+type View = "library" | "timeline" | "canvas" | "health";
 type SortKey = "order" | "title" | "artist" | "bpm" | "key" | "energy";
 
 function camelotVal(c: string | null): number {
@@ -61,6 +72,7 @@ export function App() {
   const [sortKey, setSortKey] = useState<SortKey>("order");
   const [selectMode, setSelectMode] = useState(false);
   const [selection, setSelection] = useState<Set<string>>(new Set());
+  const [activeCrateId, setActiveCrateId] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -98,6 +110,9 @@ export function App() {
     if (filter === "untagged") list = list.filter((t) => !isTagged(getTags(state, t.id)));
     else if (filter !== "all") list = list.filter((t) => getTags(state, t.id).phase === filter);
 
+    const crate = activeCrateId ? state.smartCrates.find((c) => c.id === activeCrateId) : null;
+    if (crate) list = list.filter((t) => crateMatches(t, getTags(state, t.id), crate));
+
     const q = search.trim().toLowerCase();
     if (q) {
       list = list.filter(
@@ -108,7 +123,7 @@ export function App() {
       list = [...list].sort((a, b) => cmpTracks(a, b, sortKey, state));
     }
     return list;
-  }, [tracks, filter, search, sortKey, state]);
+  }, [tracks, filter, search, sortKey, state, activeCrateId]);
 
   const onSelect = useCallback((id: string) => setSelectedId(id), []);
   const onAdd = useCallback(
@@ -146,6 +161,9 @@ export function App() {
           </ViewTab>
           <ViewTab active={view === "canvas"} onClick={() => setView("canvas")}>
             <Graph size={14} weight="regular" /> Canvas
+          </ViewTab>
+          <ViewTab active={view === "health"} onClick={() => setView("health")}>
+            <Heartbeat size={14} weight="regular" /> Health
           </ViewTab>
         </div>
         {!loading && !error && (
@@ -208,6 +226,13 @@ export function App() {
             </button>
           </div>
 
+          <SmartCratesBar
+            tracks={tracks}
+            state={state}
+            activeCrateId={activeCrateId}
+            onPick={setActiveCrateId}
+          />
+
           <div className="mt-6 grid grid-cols-1 gap-8 lg:grid-cols-[1fr_340px]">
             <main>
               {selectMode && (
@@ -259,7 +284,7 @@ export function App() {
             />
           </div>
         </div>
-      ) : (
+      ) : view === "canvas" ? (
         <div className="mt-7 flex flex-col gap-6">
           <SetCanvas
             state={state}
@@ -275,6 +300,15 @@ export function App() {
             />
           </div>
         </div>
+      ) : (
+        <HealthView
+          tracks={tracks}
+          state={state}
+          onPick={(id) => {
+            setSelectedId(id);
+            setView("library");
+          }}
+        />
       )}
 
       <footer className="mt-12 border-t border-line pt-4 text-[11px] text-ink-faint">

@@ -9,7 +9,20 @@ import {
   COMPAT_DASH,
 } from "../lib/compat";
 import { PHASE_COLOR } from "../lib/tags";
-import { CaretUp, CaretDown, X, Plus, Stack, CopySimple, Trash } from "@phosphor-icons/react";
+import { useState } from "react";
+import { tracklistText, m3u } from "../lib/export";
+import {
+  CaretUp,
+  CaretDown,
+  X,
+  Plus,
+  Stack,
+  CopySimple,
+  Trash,
+  DotsSixVertical,
+  DownloadSimple,
+  ClipboardText,
+} from "@phosphor-icons/react";
 
 interface Props {
   state: PersistState;
@@ -29,6 +42,36 @@ export function SetPanel({ state, trackById, onSelect }: Props) {
     if (items.length === 0 || confirm(`Set „${set.name}" löschen?`)) {
       dispatch({ type: "deleteSet" });
     }
+  };
+
+  const [dragIdx, setDragIdx] = useState<number | null>(null);
+  const [overIdx, setOverIdx] = useState<number | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const onDrop = (to: number) => {
+    if (dragIdx !== null && dragIdx !== to) dispatch({ type: "reorderInSet", from: dragIdx, to });
+    setDragIdx(null);
+    setOverIdx(null);
+  };
+
+  const copyList = async () => {
+    try {
+      await navigator.clipboard.writeText(tracklistText(items, state));
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* Clipboard nicht verfügbar */
+    }
+  };
+
+  const downloadM3u = () => {
+    const blob = new Blob([m3u(items)], { type: "audio/x-mpegurl" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${set.name || "set"}.m3u`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   return (
@@ -110,7 +153,35 @@ export function SetPanel({ state, trackById, onSelect }: Props) {
                     </span>
                   </div>
                 )}
-                <div className="group flex items-center gap-2">
+                <div
+                  className="group flex items-center gap-1.5 border-t-2 border-transparent"
+                  draggable
+                  onDragStart={() => setDragIdx(i)}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    if (overIdx !== i) setOverIdx(i);
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    onDrop(i);
+                  }}
+                  onDragEnd={() => {
+                    setDragIdx(null);
+                    setOverIdx(null);
+                  }}
+                  style={{
+                    opacity: dragIdx === i ? 0.4 : 1,
+                    borderTopColor:
+                      overIdx === i && dragIdx !== null && dragIdx !== i
+                        ? "var(--color-accent)"
+                        : "transparent",
+                  }}
+                >
+                  <DotsSixVertical
+                    size={13}
+                    weight="bold"
+                    className="flex-none cursor-grab text-ink-faint group-hover:text-ink-soft"
+                  />
                   <button
                     onClick={() => onSelect(t.id)}
                     className="flex h-9 w-9 flex-none items-center justify-center rounded-md border border-line font-mono text-[11px]"
@@ -149,6 +220,23 @@ export function SetPanel({ state, trackById, onSelect }: Props) {
             );
           })}
         </ol>
+      )}
+
+      {items.length > 0 && (
+        <div className="mt-3 flex gap-2 border-t border-line pt-3">
+          <button
+            onClick={copyList}
+            className="flex items-center gap-1.5 rounded-md border border-line px-2 py-1 text-[12px] text-ink-soft transition-colors hover:text-ink active:translate-y-[1px]"
+          >
+            <ClipboardText size={13} weight="regular" /> {copied ? "kopiert ✓" : "Tracklist kopieren"}
+          </button>
+          <button
+            onClick={downloadM3u}
+            className="flex items-center gap-1.5 rounded-md border border-line px-2 py-1 text-[12px] text-ink-soft transition-colors hover:text-ink active:translate-y-[1px]"
+          >
+            <DownloadSimple size={13} weight="regular" /> .m3u
+          </button>
+        </div>
       )}
     </section>
   );

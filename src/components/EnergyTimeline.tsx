@@ -1,10 +1,12 @@
+import { useRef, type PointerEvent as RPE } from "react";
 import type { Track } from "../lib/nml";
 import type { PersistState } from "../lib/store/types";
 import { EMPTY_TAGS } from "../lib/store/types";
 import { useStore, activeSet } from "../lib/store/StoreProvider";
 import { compatibility, COMPAT_COLOR, COMPAT_LABEL } from "../lib/compat";
+import { harmonizeOrder } from "../lib/autoorder";
 import { PHASE_COLOR } from "../lib/tags";
-import { CaretLeft, CaretRight, X, WaveSine } from "@phosphor-icons/react";
+import { CaretLeft, CaretRight, X, WaveSine, MagicWand } from "@phosphor-icons/react";
 
 const LANE = 300;
 const TILE = 56;
@@ -48,6 +50,41 @@ export function EnergyTimeline({ state, trackById, selectedId, onSelect }: Props
   const n = items.length;
   const tagsOf = (t: Track) => state.tags[t.id] ?? EMPTY_TAGS;
 
+  const laneRef = useRef<HTMLDivElement>(null);
+  const eDrag = useRef<{ id: string; sy: number; moved: boolean; last: number } | null>(null);
+
+  const energyFromY = (clientY: number): number => {
+    const r = laneRef.current!.getBoundingClientRect();
+    const frac = 1 - (clientY - r.top - TOP) / (LANE - TOP - BOT);
+    return Math.min(10, Math.max(1, Math.round(1 + frac * 9)));
+  };
+
+  const onTileDown = (e: RPE, id: string) => {
+    (e.currentTarget as Element).setPointerCapture(e.pointerId);
+    eDrag.current = { id, sy: e.clientY, moved: false, last: -1 };
+  };
+  const onTileMove = (e: RPE) => {
+    const d = eDrag.current;
+    if (!d) return;
+    if (Math.abs(e.clientY - d.sy) > 4) {
+      d.moved = true;
+      const en = energyFromY(e.clientY);
+      if (en !== d.last) {
+        d.last = en;
+        dispatch({ type: "setEnergy", id: d.id, energy: en });
+      }
+    }
+  };
+  const onTileUp = () => {
+    const d = eDrag.current;
+    if (d && !d.moved) onSelect(d.id);
+    eDrag.current = null;
+  };
+
+  const autoOrder = () => {
+    if (n > 2) dispatch({ type: "replaceSetOrder", ids: harmonizeOrder(items, state) });
+  };
+
   return (
     <section className="rounded-lg border border-line bg-surface p-4 sm:p-5">
       <header className="flex flex-wrap items-center gap-x-3 gap-y-1">
@@ -56,6 +93,14 @@ export function EnergyTimeline({ state, trackById, selectedId, onSelect }: Props
           {set.name}
         </h2>
         <span className="font-mono text-[12px] text-ink-faint">{n} Tracks</span>
+        {n > 2 && (
+          <button
+            onClick={autoOrder}
+            className="flex items-center gap-1.5 rounded-md border border-line px-2 py-1 text-[12px] text-ink-soft transition-colors hover:text-ink active:translate-y-[1px]"
+          >
+            <MagicWand size={13} weight="regular" /> Auto-Order
+          </button>
+        )}
         <div className="ml-auto flex items-center gap-3 text-[11px]">
           {(["ok", "okay", "break"] as const).map((l) => (
             <span key={l} className="flex items-center gap-1.5 text-ink-soft">
@@ -73,7 +118,7 @@ export function EnergyTimeline({ state, trackById, selectedId, onSelect }: Props
         </div>
       ) : (
         <div className="mt-4 overflow-x-auto pb-1">
-          <div className="relative" style={{ height: LANE, minWidth: n * MINCOL }}>
+          <div ref={laneRef} className="relative" style={{ height: LANE, minWidth: n * MINCOL }}>
             {/* Energie-Gridlines */}
             {GRID.map((g) => (
               <div
@@ -138,8 +183,10 @@ export function EnergyTimeline({ state, trackById, selectedId, onSelect }: Props
                     )}
 
                     <button
-                      onClick={() => onSelect(t.id)}
-                      className="absolute left-1/2 flex items-center justify-center overflow-hidden rounded-md border transition-transform active:scale-[0.97]"
+                      onPointerDown={(e) => onTileDown(e, t.id)}
+                      onPointerMove={onTileMove}
+                      onPointerUp={onTileUp}
+                      className="absolute left-1/2 flex touch-none cursor-ns-resize items-center justify-center overflow-hidden rounded-md border transition-transform active:scale-[0.97]"
                       style={{
                         top: center - TILE / 2,
                         width: TILE,

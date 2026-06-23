@@ -1,8 +1,19 @@
 {
-  "name": "setforge",
+  "name": "re-set",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.1.0",
   "type": "module",
+  "description": "Visual, cover-first set planning on top of your Traktor Pro 4 library.",
+  "license": "MIT",
+  "author": "SmvHutchy",
+  "keywords": [
+    "dj",
+    "traktor",
+    "set-planning",
+    "harmonic-mixing",
+    "music-library",
+    "react"
+  ],
   "scripts": {
     "dev": "vite",
     "build": "vite build",

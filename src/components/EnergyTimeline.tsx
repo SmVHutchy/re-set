@@ -5,6 +5,7 @@ import { EMPTY_TAGS } from "../lib/store/types";
 import { useStore, activeSet } from "../lib/store/StoreProvider";
 import { compatibility, COMPAT_COLOR, COMPAT_LABEL } from "../lib/compat";
 import { harmonizeOrder } from "../lib/autoorder";
+import { toast } from "../lib/toast";
 import { PHASE_COLOR } from "../lib/tags";
 import { CaretLeft, CaretRight, X, WaveSine, MagicWand } from "@phosphor-icons/react";
 
@@ -82,7 +83,10 @@ export function EnergyTimeline({ state, trackById, selectedId, onSelect }: Props
   };
 
   const autoOrder = () => {
-    if (n > 2) dispatch({ type: "replaceSetOrder", ids: harmonizeOrder(items, state) });
+    if (n > 2) {
+      dispatch({ type: "replaceSetOrder", ids: harmonizeOrder(items, state) });
+      toast("Set harmonisch neu geordnet");
+    }
   };
 
   return (

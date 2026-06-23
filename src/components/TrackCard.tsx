@@ -2,7 +2,7 @@ import { memo } from "react";
 import type { Track } from "../lib/nml";
 import type { TrackTags } from "../lib/store/types";
 import { PHASE_COLOR, PHASE_LABEL } from "../lib/tags";
-import { Plus, Check } from "@phosphor-icons/react";
+import { Plus, Check, Play } from "@phosphor-icons/react";
 
 function initials(artist: string): string {
   const parts = artist.split(/\s+/).filter(Boolean);
@@ -21,6 +21,7 @@ interface Props {
   onSelect: (id: string) => void;
   onAdd: (id: string) => void;
   onToggle: (id: string) => void;
+  onPreview: (id: string) => void;
 }
 
 export const TrackCard = memo(function TrackCard({
@@ -33,15 +34,17 @@ export const TrackCard = memo(function TrackCard({
   onSelect,
   onAdd,
   onToggle,
+  onPreview,
 }: Props) {
   const phaseColor = tags.phase ? PHASE_COLOR[tags.phase] : null;
   const active = selectMode ? checked : selected;
 
   return (
     <article className="group flex flex-col">
+      <div className="relative">
       <button
         onClick={() => (selectMode ? onToggle(track.id) : onSelect(track.id))}
-        className="relative aspect-square w-full overflow-hidden rounded-lg border text-left transition-transform duration-200 active:scale-[0.98]"
+        className="relative aspect-square w-full overflow-hidden rounded-lg border text-left transition-transform duration-200 hover:-translate-y-[2px] active:scale-[0.98]"
         style={{
           borderColor: active ? "var(--color-accent)" : "var(--color-line)",
           boxShadow: active ? "0 0 0 1px var(--color-accent)" : "none",
@@ -109,6 +112,20 @@ export const TrackCard = memo(function TrackCard({
           </span>
         )}
       </button>
+        {track.audioPath && !selectMode && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onPreview(track.id);
+            }}
+            aria-label="Vorhören"
+            className="absolute bottom-2 left-2 flex h-6 w-6 items-center justify-center rounded-md opacity-0 transition-opacity group-hover:opacity-100"
+            style={{ background: "var(--color-accent)", color: "var(--color-on-accent)" }}
+          >
+            <Play size={12} weight="fill" />
+          </button>
+        )}
+      </div>
 
       <div className="mt-2 flex min-w-0 items-start gap-1.5">
         <div className="min-w-0 flex-1">

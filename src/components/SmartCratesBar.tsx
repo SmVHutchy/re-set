@@ -5,6 +5,7 @@ import { EMPTY_TAGS } from "../lib/store/types";
 import { useStore } from "../lib/store/StoreProvider";
 import { newId } from "../lib/store/storage";
 import { crateMatches } from "../lib/smartcrate";
+import { toast } from "../lib/toast";
 import { PHASES } from "../lib/tags";
 import { Plus, X, Stack, Trash } from "@phosphor-icons/react";
 
@@ -57,6 +58,7 @@ export function SmartCratesBar({ tracks, state, activeCrateId, onPick }: Props) 
     const filled = rules.filter((r) => r.value.trim() !== "");
     if (!name.trim() || filled.length === 0) return;
     dispatch({ type: "addSmartCrate", crate: { id: newId(), name: name.trim(), rules: filled } });
+    toast("Smart-Crate gespeichert");
     setName("");
     setRules([defaultRule("phase")]);
     setOpen(false);

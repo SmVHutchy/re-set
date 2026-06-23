@@ -72,7 +72,7 @@ export function HealthView({ tracks, state, onPick }: Props) {
   const maxGenre = Math.max(1, ...health.topGenres.map(([, c]) => c));
 
   return (
-    <div className="mt-7 flex flex-col gap-6">
+    <div className="view-fade mt-7 flex flex-col gap-6">
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
         <Metric label="Tracks" value={tracks.length} />
         <Metric label="ohne Key" value={health.missingKey.length} accent />

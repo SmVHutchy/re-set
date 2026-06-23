@@ -19,6 +19,7 @@ interface Props {
   onSelect: (id: string) => void;
   onAdd: (id: string) => void;
   onToggle: (id: string) => void;
+  onPreview: (id: string) => void;
 }
 
 function SkeletonGrid() {
@@ -47,6 +48,7 @@ export function CoverWall({
   onSelect,
   onAdd,
   onToggle,
+  onPreview,
 }: Props) {
   if (loading) return <SkeletonGrid />;
 
@@ -89,6 +91,7 @@ export function CoverWall({
           onSelect={onSelect}
           onAdd={onAdd}
           onToggle={onToggle}
+          onPreview={onPreview}
         />
       ))}
     </div>

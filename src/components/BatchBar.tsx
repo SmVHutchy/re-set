@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useStore } from "../lib/store/StoreProvider";
+import { toast } from "../lib/toast";
 import { PHASES, PHASE_COLOR } from "../lib/tags";
 import { Plus, X, Check } from "@phosphor-icons/react";
 
@@ -70,7 +71,10 @@ export function BatchBar({ ids, visibleCount, onSelectAllVisible, onClear }: Pro
         <div className="ml-auto flex items-center gap-2">
           <button
             disabled={disabled}
-            onClick={() => dispatch({ type: "batchAddToSet", ids })}
+            onClick={() => {
+              dispatch({ type: "batchAddToSet", ids });
+              toast(`${ids.length} ins Set`);
+            }}
             className="flex items-center gap-1 rounded-md border px-2 py-1 text-[12px] font-medium transition-colors active:translate-y-[1px] disabled:opacity-40"
             style={{ borderColor: "var(--color-accent)", color: "var(--color-accent)" }}
           >

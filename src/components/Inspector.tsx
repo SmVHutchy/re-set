@@ -3,16 +3,16 @@ import type { Track } from "../lib/nml";
 import type { TrackTags } from "../lib/store/types";
 import { useStore } from "../lib/store/StoreProvider";
 import { PHASES, PHASE_COLOR, VIBE_SUGGESTIONS } from "../lib/tags";
-import { AudioPreview } from "./AudioPreview";
-import { Plus, Check, X, SlidersHorizontal } from "@phosphor-icons/react";
+import { Plus, Check, X, SlidersHorizontal, Play } from "@phosphor-icons/react";
 
 interface Props {
   track: Track | null;
   tags: TrackTags;
   inSet: boolean;
+  onPreview: (id: string) => void;
 }
 
-export function Inspector({ track, tags, inSet }: Props) {
+export function Inspector({ track, tags, inSet, onPreview }: Props) {
   const { dispatch } = useStore();
   const [vibeInput, setVibeInput] = useState("");
 
@@ -45,7 +45,14 @@ export function Inspector({ track, tags, inSet }: Props) {
         </div>
       </div>
 
-      {track.audioPath && <AudioPreview key={track.audioPath} src={track.audioPath} />}
+      {track.audioPath && (
+        <button
+          onClick={() => onPreview(track.id)}
+          className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-md border border-line py-2 text-[13px] text-ink-soft transition-colors hover:text-ink active:translate-y-[1px]"
+        >
+          <Play size={14} weight="fill" /> Vorhören
+        </button>
+      )}
 
       <Field label="Energie">
         <div className="flex gap-1">

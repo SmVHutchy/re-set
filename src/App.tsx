@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { parseNml, type Track } from "./lib/nml";
 import { PHASES, PHASE_COLOR, type Phase } from "./lib/tags";
 import { useStore, getTags, activeSet } from "./lib/store/StoreProvider";
@@ -12,7 +12,11 @@ import { BatchBar } from "./components/BatchBar";
 import { SmartCratesBar } from "./components/SmartCratesBar";
 import { HealthView } from "./components/HealthView";
 import { crateMatches } from "./lib/smartcrate";
+import { toast } from "./lib/toast";
 import { Logo } from "./components/Logo";
+import { MiniPlayer } from "./components/MiniPlayer";
+import { Toaster } from "./components/Toaster";
+import { HelpOverlay } from "./components/HelpOverlay";
 import {
   GridFour,
   WaveSine,
@@ -22,6 +26,8 @@ import {
   Checks,
   ArrowUUpLeft,
   ArrowUUpRight,
+  Question,
+  X,
 } from "@phosphor-icons/react";
 
 type Filter = Phase | "all" | "untagged";
@@ -78,6 +84,10 @@ export function App() {
   const [selectMode, setSelectMode] = useState(false);
   const [selection, setSelection] = useState<Set<string>>(new Set());
   const [activeCrateId, setActiveCrateId] = useState<string | null>(null);
+  const [previewId, setPreviewId] = useState<string | null>(null);
+  const [showHelp, setShowHelp] = useState(false);
+  const [onboarded, setOnboarded] = useState(() => localStorage.getItem("reset.onboarded") === "1");
+  const searchRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     let alive = true;
@@ -97,24 +107,68 @@ export function App() {
     };
   }, []);
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const mod = e.metaKey || e.ctrlKey;
-      if (!mod || e.key.toLowerCase() !== "z") return;
-      const el = document.activeElement;
-      if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA")) return;
-      e.preventDefault();
-      dispatch({ type: e.shiftKey ? "redo" : "undo" });
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [dispatch]);
-
   const trackById = useMemo(() => {
     const m = new Map<string, Track>();
     for (const t of tracks) m.set(t.id, t);
     return m;
   }, [tracks]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const el = document.activeElement as HTMLElement | null;
+      const typing = !!el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA");
+      const mod = e.metaKey || e.ctrlKey;
+
+      if (mod && e.key.toLowerCase() === "z") {
+        if (typing) return;
+        e.preventDefault();
+        dispatch({ type: e.shiftKey ? "redo" : "undo" });
+        toast(e.shiftKey ? "Wiederholt" : "Rückgängig");
+        return;
+      }
+      if (typing) {
+        if (e.key === "Escape") el?.blur();
+        return;
+      }
+      if (e.key === "?") {
+        e.preventDefault();
+        setShowHelp((h) => !h);
+        return;
+      }
+      if (e.key === "Escape") {
+        setShowHelp(false);
+        return;
+      }
+      if (e.key === "/") {
+        e.preventDefault();
+        searchRef.current?.focus();
+        return;
+      }
+      if (!selectedId) return;
+      if (e.key >= "1" && e.key <= "4") {
+        const phase = PHASES[Number(e.key) - 1];
+        dispatch({ type: "setPhase", id: selectedId, phase });
+        toast(`Phase: ${phase}`);
+        return;
+      }
+      if (e.key === "0") {
+        dispatch({ type: "setPhase", id: selectedId, phase: null });
+        return;
+      }
+      if (e.key === "+" || e.key === "=") {
+        dispatch({ type: "addToSet", trackId: selectedId });
+        toast("Ins Set");
+        return;
+      }
+      if (e.key === " ") {
+        e.preventDefault();
+        if (trackById.get(selectedId)?.audioPath) setPreviewId(selectedId);
+        return;
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [dispatch, selectedId, trackById]);
 
   const setIds = useMemo(() => new Set(activeSet(state).trackIds), [state]);
 
@@ -145,9 +199,13 @@ export function App() {
 
   const onSelect = useCallback((id: string) => setSelectedId(id), []);
   const onAdd = useCallback(
-    (id: string) => dispatch({ type: "addToSet", trackId: id }),
+    (id: string) => {
+      dispatch({ type: "addToSet", trackId: id });
+      toast("Ins Set");
+    },
     [dispatch],
   );
+  const onPreview = useCallback((id: string) => setPreviewId(id), []);
   const onToggle = useCallback((id: string) => {
     setSelection((prev) => {
       const n = new Set(prev);
@@ -162,9 +220,13 @@ export function App() {
   };
 
   const selectedTrack = selectedId ? trackById.get(selectedId) ?? null : null;
+  const previewTrack = previewId ? trackById.get(previewId) ?? null : null;
 
   return (
-    <div className="mx-auto min-h-[100dvh] w-full max-w-[1400px] px-4 py-7 sm:px-8 sm:py-10">
+    <div
+      className="mx-auto min-h-[100dvh] w-full max-w-[1400px] px-4 py-7 sm:px-8 sm:py-10"
+      style={{ paddingBottom: previewTrack ? 84 : undefined }}
+    >
       <header className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
         <h1 className="flex items-center gap-2 text-[18px] font-medium tracking-tight text-ink">
           <Logo size={22} />
@@ -194,6 +256,9 @@ export function App() {
             <HeaderIconBtn label="Wiederholen (⌘⇧Z)" disabled={!canRedo} onClick={() => dispatch({ type: "redo" })}>
               <ArrowUUpRight size={15} weight="regular" />
             </HeaderIconBtn>
+            <HeaderIconBtn label="Shortcuts (?)" disabled={false} onClick={() => setShowHelp(true)}>
+              <Question size={15} weight="regular" />
+            </HeaderIconBtn>
           </div>
           {!loading && !error && (
             <span className="font-mono text-[12px] text-ink-soft">
@@ -202,6 +267,28 @@ export function App() {
           )}
         </div>
       </header>
+
+      {!onboarded && (
+        <div className="mt-4 flex items-start gap-3 rounded-lg border border-line bg-raise p-3">
+          <p className="flex-1 text-[13px] text-ink-soft">
+            <span className="font-medium text-ink">So läuft Re:SET:</span> Tracks taggen (Energie/Phase) →
+            mit <span className="font-mono text-ink">+</span> ins Set → in der <span className="text-ink">Timeline</span>{" "}
+            die Energiekurve lesen → als <span className="font-mono text-ink">.m3u</span> exportieren. Drück{" "}
+            <kbd className="rounded border border-line bg-base px-1 font-mono text-[11px] text-ink-soft">?</kbd> für
+            alle Shortcuts.
+          </p>
+          <button
+            onClick={() => {
+              localStorage.setItem("reset.onboarded", "1");
+              setOnboarded(true);
+            }}
+            aria-label="Hinweis schließen"
+            className="flex h-6 w-6 flex-none items-center justify-center rounded text-ink-faint hover:text-ink"
+          >
+            <X size={14} weight="bold" />
+          </button>
+        </div>
+      )}
 
       {view === "library" ? (
         <>
@@ -226,6 +313,7 @@ export function App() {
                 className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-faint"
               />
               <input
+                ref={searchRef}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Titel oder Artist suchen…"
@@ -285,6 +373,7 @@ export function App() {
                 onSelect={onSelect}
                 onAdd={onAdd}
                 onToggle={onToggle}
+                onPreview={onPreview}
               />
             </main>
 
@@ -293,13 +382,14 @@ export function App() {
                 track={selectedTrack}
                 tags={selectedTrack ? getTags(state, selectedTrack.id) : { energy: null, phase: null, vibe: [] }}
                 inSet={selectedTrack ? setIds.has(selectedTrack.id) : false}
+                onPreview={onPreview}
               />
               <SetPanel state={state} trackById={trackById} onSelect={onSelect} />
             </aside>
           </div>
         </>
       ) : view === "timeline" ? (
-        <div className="mt-7 flex flex-col gap-6">
+        <div className="view-fade mt-7 flex flex-col gap-6">
           <EnergyTimeline
             state={state}
             trackById={trackById}
@@ -311,11 +401,12 @@ export function App() {
               track={selectedTrack}
               tags={selectedTrack ? getTags(state, selectedTrack.id) : { energy: null, phase: null, vibe: [] }}
               inSet={selectedTrack ? setIds.has(selectedTrack.id) : false}
+              onPreview={onPreview}
             />
           </div>
         </div>
       ) : view === "canvas" ? (
-        <div className="mt-7 flex flex-col gap-6">
+        <div className="view-fade mt-7 flex flex-col gap-6">
           <SetCanvas
             state={state}
             trackById={trackById}
@@ -327,6 +418,7 @@ export function App() {
               track={selectedTrack}
               tags={selectedTrack ? getTags(state, selectedTrack.id) : { energy: null, phase: null, vibe: [] }}
               inSet={selectedTrack ? setIds.has(selectedTrack.id) : false}
+              onPreview={onPreview}
             />
           </div>
         </div>
@@ -345,6 +437,10 @@ export function App() {
         Tags &amp; Sets liegen lokal (localStorage), bleiben über Reloads erhalten — später SQLite.
         Key &amp; BPM kommen real aus der collection.nml; Kompatibilität = Harmonik + Tempo + Energie (§7.1).
       </footer>
+
+      <Toaster />
+      <MiniPlayer track={previewTrack} onClose={() => setPreviewId(null)} />
+      {showHelp && <HelpOverlay onClose={() => setShowHelp(false)} />}
     </div>
   );
 }

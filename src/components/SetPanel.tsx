@@ -11,6 +11,7 @@ import {
 import { PHASE_COLOR } from "../lib/tags";
 import { useState } from "react";
 import { tracklistText, m3u } from "../lib/export";
+import { toast } from "../lib/toast";
 import {
   CaretUp,
   CaretDown,
@@ -58,6 +59,7 @@ export function SetPanel({ state, trackById, onSelect }: Props) {
     try {
       await navigator.clipboard.writeText(tracklistText(items, state));
       setCopied(true);
+      toast("Tracklist kopiert");
       setTimeout(() => setCopied(false), 1500);
     } catch {
       /* Clipboard nicht verfügbar */
@@ -72,6 +74,7 @@ export function SetPanel({ state, trackById, onSelect }: Props) {
     a.download = `${set.name || "set"}.m3u`;
     a.click();
     URL.revokeObjectURL(url);
+    toast(".m3u exportiert");
   };
 
   return (

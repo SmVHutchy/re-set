@@ -1,4 +1,4 @@
-# SetForge — Roadmap & Fortschritt
+# Re:SET — Roadmap & Fortschritt
 
 Wo wir stehen. Vollständige Spezifikation: [PFLICHTENHEFT.md](PFLICHTENHEFT.md).
 Detaillierte Historie: `git log --oneline`.

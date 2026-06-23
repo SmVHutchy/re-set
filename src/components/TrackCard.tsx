@@ -102,7 +102,7 @@ export const TrackCard = memo(function TrackCard({
               background: checked
                 ? "var(--color-accent)"
                 : "color-mix(in oklab, var(--color-base) 60%, transparent)",
-              color: "#3b1426",
+              color: "var(--color-on-accent)",
             }}
           >
             {checked && <Check size={12} weight="bold" />}

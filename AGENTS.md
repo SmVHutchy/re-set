@@ -1,7 +1,7 @@
-# AGENTS.md — SetForge
+# AGENTS.md — Re:SET
 
 ## Project overview
-SetForge is a local-first, Cover-centric DJ set planner built on the Traktor Pro 4 library.
+Re:SET is a local-first, Cover-centric DJ set planner built on the Traktor Pro 4 library.
 Single-package app: Vite + React 19 + TypeScript + Tailwind CSS v4 SPA. A Tauri (Rust) shell
 for Traktor write-back is planned but not yet present. Full spec in `PFLICHTENHEFT.md`; human
 intro in `README.md`.

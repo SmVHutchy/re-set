@@ -12,8 +12,8 @@ import { BatchBar } from "./components/BatchBar";
 import { SmartCratesBar } from "./components/SmartCratesBar";
 import { HealthView } from "./components/HealthView";
 import { crateMatches } from "./lib/smartcrate";
+import { Logo } from "./components/Logo";
 import {
-  Waveform,
   GridFour,
   WaveSine,
   Graph,
@@ -33,6 +33,9 @@ function camelotVal(c: string | null): number {
   return parseInt(m[1], 10) * 2 + (m[2] === "B" ? 1 : 0);
 }
 
+// Guard gegen Infinity - Infinity = NaN (beide Werte fehlen → gleichwertig).
+const numCmp = (x: number, y: number) => (x === y ? 0 : x - y);
+
 function cmpTracks(a: Track, b: Track, key: SortKey, state: PersistState): number {
   switch (key) {
     case "title":
@@ -40,11 +43,11 @@ function cmpTracks(a: Track, b: Track, key: SortKey, state: PersistState): numbe
     case "artist":
       return a.artist.localeCompare(b.artist);
     case "bpm":
-      return (a.bpm ?? Infinity) - (b.bpm ?? Infinity);
+      return numCmp(a.bpm ?? Infinity, b.bpm ?? Infinity);
     case "key":
-      return camelotVal(a.keyCamelot) - camelotVal(b.keyCamelot);
+      return numCmp(camelotVal(a.keyCamelot), camelotVal(b.keyCamelot));
     case "energy":
-      return (getTags(state, a.id).energy ?? Infinity) - (getTags(state, b.id).energy ?? Infinity);
+      return numCmp(getTags(state, a.id).energy ?? Infinity, getTags(state, b.id).energy ?? Infinity);
     default:
       return 0;
   }
@@ -149,8 +152,10 @@ export function App() {
     <div className="mx-auto min-h-[100dvh] w-full max-w-[1400px] px-4 py-7 sm:px-8 sm:py-10">
       <header className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
         <h1 className="flex items-center gap-2 text-[18px] font-medium tracking-tight text-ink">
-          <Waveform size={20} weight="regular" className="text-accent" />
-          SetForge
+          <Logo size={22} />
+          <span className="font-bold tracking-tight">
+            Re<span style={{ color: "var(--color-accent)" }}>:</span>SET
+          </span>
         </h1>
         <div className="flex items-center gap-0.5 rounded-md border border-line p-0.5">
           <ViewTab active={view === "library"} onClick={() => setView("library")}>

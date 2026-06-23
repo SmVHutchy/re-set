@@ -1,4 +1,4 @@
-# SetForge
+# Re:SET
 
 Visueller, Cover-zentrierter Set-Planer für DJ-Live-Sets auf Basis der Traktor-Pro-4-Library.
 Konzept & Spezifikation: [PFLICHTENHEFT.md](PFLICHTENHEFT.md).

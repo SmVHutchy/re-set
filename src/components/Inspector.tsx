@@ -157,7 +157,7 @@ export function Inspector({ track, tags, inSet }: Props) {
         style={{
           borderColor: inSet ? "var(--color-sig)" : "var(--color-accent)",
           background: inSet ? "transparent" : "var(--color-accent)",
-          color: inSet ? "var(--color-sig)" : "#3b1426",
+          color: inSet ? "var(--color-sig)" : "var(--color-on-accent)",
         }}
       >
         {inSet ? <Check size={14} weight="bold" /> : <Plus size={14} weight="bold" />}

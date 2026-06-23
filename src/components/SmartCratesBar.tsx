@@ -53,8 +53,10 @@ export function SmartCratesBar({ tracks, state, activeCrateId, onPick }: Props) 
   };
 
   const save = () => {
-    if (!name.trim() || rules.length === 0) return;
-    dispatch({ type: "addSmartCrate", crate: { id: newId(), name: name.trim(), rules } });
+    // Leere Regeln verwerfen, sonst würde z. B. genre/text "contains ''" alles matchen.
+    const filled = rules.filter((r) => r.value.trim() !== "");
+    if (!name.trim() || filled.length === 0) return;
+    dispatch({ type: "addSmartCrate", crate: { id: newId(), name: name.trim(), rules: filled } });
     setName("");
     setRules([defaultRule("phase")]);
     setOpen(false);
@@ -128,7 +130,7 @@ export function SmartCratesBar({ tracks, state, activeCrateId, onPick }: Props) 
             <button
               onClick={save}
               className="ml-auto rounded-md border px-3 py-1 text-[12px] font-medium"
-              style={{ borderColor: "var(--color-accent)", background: "var(--color-accent)", color: "#3b1426" }}
+              style={{ borderColor: "var(--color-accent)", background: "var(--color-accent)", color: "var(--color-on-accent)" }}
             >
               Speichern
             </button>

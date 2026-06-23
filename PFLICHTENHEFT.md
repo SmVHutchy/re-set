@@ -1,4 +1,4 @@
-# Pflichtenheft — „SetForge"
+# Pflichtenheft — „Re:SET"
 
 **Visueller, Cover-zentrierter Set-Planer für DJ Live-Sets auf Basis der Traktor-Pro-4-Library**
 
@@ -291,7 +291,7 @@ Meilensteine: **M1 = AP1–AP3 (nutzbares MVP mit Write-Back)** → **M2 = AP4�
 - Speicherort der `collection.nml` auf deinem System (Pfad bestätigen) + ob mehrere Collections existieren.
 - Camelot vs. Open-Key Anzeige-Default.
 - Tagging manuell vs. mit automatischen Vorschlägen (FA-10) — ja/nein für v1.
-- Branding/Name final („SetForge" ist Arbeitstitel).
+- Branding/Name final („Re:SET" ist Arbeitstitel).
 
 ---
 
@@ -346,6 +346,7 @@ Leitsatz: **warmes Graphit statt kaltes Blauschwarz** (Analog-/Club-Wärme, kein
 - UI-Schrift: **Geist Sans** (locked). Inter ist bewusst **verworfen** (zu generisch fürs Premium-Tool; Dashboard-Regel: hochwertige Sans, keine Serifen in Software-UI).
 - **Mono für Zahlen** (BPM, Key, Energie): **Geist Mono** — tabellarische Ziffern für saubere Ausrichtung. Im dichten Cockpit-Modus (Track-Listen) Mono für *alle* Zahlen.
 - Skala: 11/12/13 (Meta) · 14/16 (Body) · 18/22 (Headings), `tracking-tight` auf Headern. Gewichte nur **400 / 500**, 600 sparsam für Zahlen-Akzente. **Keine überdimensionierten H1** — Hierarchie über Gewicht/Farbe, nicht über Riesen-Scale.
+- **Ausnahme (bewusst):** die Brand-Wortmarke „Re:SET" im Header nutzt **700 (bold)** als Logotype — gilt nur für den Marken-Namen, nicht für UI-Text.
 
 ### 15.3 Spacing, Radius, Elevation, Motion
 - **Spacing** (4er-Basis): 4 · 8 · 12 · 16 · 24 · 32 · 48.
@@ -377,7 +378,7 @@ Skill-Baseline wäre 8/6/4 — für ein Live-Set-Prep-Tool bewusst angepasst:
 - **DESIGN_VARIANCE: 5** — funktionale App-Layouts mit gezielter Asymmetrie auf der Canvas; bei schmaler Breite strikt einspaltig.
 
 ### 16.3 Bewusst NICHT übernommen
-Das „Creative Arsenal" (Bento-Perpetual-Motion, Scrolltelling, Magnetic Buttons, Liquid-Glass-Hero, Kinetic Typo) ist Marketing-/Landingpage-Vokabular und für die **App** ungeeignet (lenkt bei der Set-Vorbereitung ab). → Reserviert für eine spätere **Promo-/Landingpage** von SetForge, nicht fürs Tool.
+Das „Creative Arsenal" (Bento-Perpetual-Motion, Scrolltelling, Magnetic Buttons, Liquid-Glass-Hero, Kinetic Typo) ist Marketing-/Landingpage-Vokabular und für die **App** ungeeignet (lenkt bei der Set-Vorbereitung ab). → Reserviert für eine spätere **Promo-/Landingpage** von Re:SET, nicht fürs Tool.
 
 ### 16.4 Reconciliation der Farb-/Typo-Regeln
 - **Lila-Ban:** erfüllt — Violett entfernt; Akzent Deep-Rose/Magenta (erlaubt).

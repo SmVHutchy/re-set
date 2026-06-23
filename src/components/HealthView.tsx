@@ -3,6 +3,7 @@ import type { Track } from "../lib/nml";
 import type { PersistState } from "../lib/store/types";
 import { EMPTY_TAGS, isTagged } from "../lib/store/types";
 import { PHASES, PHASE_COLOR, type Phase } from "../lib/tags";
+import { flags, FLAG_LABEL } from "../lib/quality";
 import { WarningCircle } from "@phosphor-icons/react";
 
 interface Props {
@@ -35,6 +36,10 @@ export function HealthView({ tracks, state, onPick }: Props) {
     const genres = new Map<string, number>();
     const phaseCounts: Record<Phase, number> = { pre: 0, mid: 0, peak: 0, late: 0 };
     const energyCounts = new Array(11).fill(0) as number[];
+    const qualityIssues: Track[] = [];
+    let lowQ = 0;
+    let clipQ = 0;
+    let fakeQ = 0;
 
     for (const t of tracks) {
       if (!t.keyCamelot) missingKey.push(t);
@@ -46,6 +51,13 @@ export function HealthView({ tracks, state, onPick }: Props) {
       if (tg.energy != null) energyCounts[tg.energy]++;
       const g = t.genre?.trim();
       if (g) genres.set(g, (genres.get(g) ?? 0) + 1);
+      const qf = flags(t);
+      if (qf.length) {
+        qualityIssues.push(t);
+        if (qf.includes("low")) lowQ++;
+        if (qf.includes("clip")) clipQ++;
+        if (qf.includes("fake")) fakeQ++;
+      }
       const k = `${t.title.toLowerCase()}|${t.artist.toLowerCase()}`;
       const arr = byName.get(k) ?? [];
       arr.push(t);
@@ -54,6 +66,15 @@ export function HealthView({ tracks, state, onPick }: Props) {
     const dupes = [...byName.values()].filter((g) => g.length > 1);
     const incomplete = tracks.filter((t) => !t.keyCamelot || t.bpm == null || !t.coverPath);
     const topGenres = [...genres.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6);
+    const lufsVals = tracks
+      .map((t) => t.lufs)
+      .filter((x): x is number => x != null)
+      .sort((a, b) => a - b);
+    const medianLufs = lufsVals.length ? lufsVals[Math.floor(lufsVals.length / 2)] : null;
+    const loudOutliers =
+      medianLufs != null
+        ? tracks.filter((t) => t.lufs != null && Math.abs(t.lufs - medianLufs) > 3)
+        : [];
     return {
       missingKey,
       missingBpm,
@@ -64,6 +85,12 @@ export function HealthView({ tracks, state, onPick }: Props) {
       phaseCounts,
       energyCounts,
       topGenres,
+      qualityIssues,
+      lowQ,
+      clipQ,
+      fakeQ,
+      loudOutliers,
+      medianLufs,
     };
   }, [tracks, state]);
 
@@ -109,6 +136,42 @@ export function HealthView({ tracks, state, onPick }: Props) {
           </div>
         </div>
       </section>
+
+      {(health.qualityIssues.length > 0 || health.loudOutliers.length > 0) && (
+        <section className="rounded-lg border border-line bg-surface p-4">
+          <h2 className="mb-3 text-[14px] font-medium text-ink">Qualität</h2>
+          <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <Metric label="Low-Bitrate" value={health.lowQ} accent />
+            <Metric label="Clipping" value={health.clipQ} accent />
+            <Metric label="Transcode-Verdacht" value={health.fakeQ} accent />
+            <Metric label="Lautheits-Ausreißer" value={health.loudOutliers.length} accent />
+          </div>
+          <ul className="flex flex-col">
+            {health.qualityIssues.slice(0, 60).map((t) => (
+              <li key={t.id}>
+                <button
+                  onClick={() => onPick(t.id)}
+                  className="flex w-full items-center gap-2 rounded px-1 py-1.5 text-left hover:bg-raise"
+                >
+                  <span className="min-w-0 flex-1 truncate text-[12px] text-ink">
+                    {t.artist} – {t.title}
+                  </span>
+                  <span className="flex flex-none gap-1">
+                    {flags(t).map((f) => (
+                      <Pill key={f}>{FLAG_LABEL[f]}</Pill>
+                    ))}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+          {health.medianLufs != null && (
+            <p className="mt-2 text-[11px] text-ink-faint">
+              Median-Lautheit der Library: {health.medianLufs} LUFS · Ausreißer = mehr als 3 LU entfernt.
+            </p>
+          )}
+        </section>
+      )}
 
       {health.dupes.length > 0 && (
         <section className="rounded-lg border border-line bg-surface p-4">

@@ -33,10 +33,13 @@ Zwei Wege — die App lädt `collection.local.nml` bevorzugt, sonst die Beispiel
 
 ```bash
 npm run import:music -- "/Pfad/zu/deinem/Musik-Ordner"
+# mit Audioqualitäts-Tiefenscan (LUFS/True-Peak/HF-Cutoff via ffmpeg):
+npm run import:music -- "/Pfad/zu/deinem/Musik-Ordner" --deep
 ```
 
-Schreibt `public/collection.local.nml` + `public/covers/` (beide gitignored, read-only auf der Quelle).
-BPM/Key kommen nur, wenn sie in den Datei-Tags stehen.
+Schreibt `public/collection.local.nml` + `public/covers/` + `public/audio/` (alle gitignored, read-only auf der Quelle).
+BPM/Key kommen nur, wenn sie in den Datei-Tags stehen. `--deep` braucht `ffmpeg` im PATH und
+markiert Low-Bitrate, Clipping, Transcode-Verdacht und Lautheits-Ausreißer (Health-Tab → Qualität).
 
 **B) Echte Traktor-Library:** Kopiere deine `collection.nml`
 (Traktor: Dokumente → Native Instruments → Traktor …) nach `public/collection.local.nml`.

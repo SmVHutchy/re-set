@@ -14,6 +14,12 @@ export interface Track {
   coverPath: string | null;
   audioPath: string | null;
   durationS: number | null;
+  bitrate: number | null; // kbps
+  sampleRate: number | null;
+  lossless: boolean;
+  lufs: number | null; // integrierte Lautheit
+  truePeak: number | null; // dBFS
+  hfMax: number | null; // dB Energie über 16 kHz (Transcode-Indikator)
 }
 
 function num(v: string | null): number | null {
@@ -74,6 +80,15 @@ export function parseNml(xml: string): Track[] {
       coverPath: entry.getAttribute("COVERART"),
       audioPath: entry.getAttribute("AUDIO"),
       durationS: num(info?.getAttribute("PLAYTIME") ?? null),
+      bitrate: (() => {
+        const b = num(info?.getAttribute("BITRATE") ?? null);
+        return b != null ? Math.round(b / 1000) : null;
+      })(),
+      sampleRate: num(info?.getAttribute("SAMPLERATE") ?? null),
+      lossless: info?.getAttribute("LOSSLESS") === "1",
+      lufs: num(info?.getAttribute("LUFS") ?? null),
+      truePeak: num(info?.getAttribute("TRUEPEAK") ?? null),
+      hfMax: num(info?.getAttribute("HFMAX") ?? null),
     });
   }
 

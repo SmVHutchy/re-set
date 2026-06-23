@@ -4,14 +4,47 @@
 import { parseFile } from "music-metadata";
 import { readdir, mkdir, writeFile, copyFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
+import { spawnSync } from "node:child_process";
 import { join, extname, basename, resolve } from "node:path";
 
 const AUDIO = new Set([".mp3", ".aiff", ".aif", ".flac", ".wav", ".m4a", ".ogg"]);
 
-const inputDir = process.argv[2];
+const args = process.argv.slice(2);
+let deep = args.includes("--deep");
+const inputDir = args.find((a) => !a.startsWith("--"));
 if (!inputDir) {
-  console.error('Usage: node scripts/import-music.mjs "<music-folder>"');
+  console.error('Usage: node scripts/import-music.mjs "<music-folder>" [--deep]');
   process.exit(1);
+}
+
+if (deep && spawnSync("ffmpeg", ["-version"]).status !== 0) {
+  console.warn("ffmpeg nicht gefunden — Deep-Scan (LUFS/Peak/Cutoff) übersprungen.");
+  deep = false;
+}
+
+// ebur128 (Lautheit + True-Peak) + Hochpass>16k + volumedetect (HF-Energie für Transcode-Verdacht).
+function deepScan(file) {
+  const r = spawnSync(
+    "ffmpeg",
+    ["-hide_banner", "-nostats", "-i", file, "-af", "ebur128=peak=true,highpass=f=16000,volumedetect", "-f", "null", "-"],
+    { encoding: "utf8", maxBuffer: 1 << 25 },
+  );
+  const s = (r.stderr || "") + (r.stdout || "");
+  // LUFS/Peak stehen erst in der End-Summary → letztes Vorkommen nehmen
+  // (frühe Frames liefern Stille-Startwerte wie -70 LUFS).
+  const last = (re) => {
+    const all = [...s.matchAll(re)];
+    return all.length ? all[all.length - 1][1] : null;
+  };
+  const first = (re) => {
+    const x = s.match(re);
+    return x ? x[1] : null;
+  };
+  return {
+    lufs: last(/I:\s*(-?\d+(?:\.\d+)?)\s*LUFS/g),
+    peak: last(/Peak:\s*(-?\d+(?:\.\d+)?)\s*dBFS/g),
+    hf: first(/max_volume:\s*(-?\d+(?:\.\d+)?)\s*dB/),
+  };
 }
 
 const root = resolve(inputDir);
@@ -44,8 +77,9 @@ const entries = [];
 let withCover = 0;
 let withBpm = 0;
 let withKey = 0;
+let deepOk = 0;
 
-for (const f of files) {
+for (const [idx, f] of files.entries()) {
   const full = join(root, f);
   try {
     const md = await parseFile(full);
@@ -56,8 +90,26 @@ for (const f of files) {
     const genre = (c.genre && c.genre[0]) || "";
     const bpm = c.bpm ? Math.round(Number(c.bpm)) : null;
     const key = c.key || "";
-    const dur = md.format && md.format.duration ? Math.round(md.format.duration) : null;
+    const fmt = md.format ?? {};
+    const dur = fmt.duration ? Math.round(fmt.duration) : null;
+    const bitrate = fmt.bitrate ? Math.round(fmt.bitrate) : null;
+    const sampleRate = fmt.sampleRate || null;
+    const lossless = fmt.lossless ? 1 : 0;
     const hash = createHash("sha1").update(full).digest("hex").slice(0, 12);
+
+    let deepAttrs = "";
+    if (deep) {
+      const d = deepScan(full);
+      deepAttrs = [
+        d.lufs && `LUFS="${d.lufs}"`,
+        d.peak && `TRUEPEAK="${d.peak}"`,
+        d.hf && `HFMAX="${d.hf}"`,
+      ]
+        .filter(Boolean)
+        .join(" ");
+      if (d.lufs) deepOk++;
+      process.stdout.write(`  Deep-Scan ${idx + 1}/${files.length}\r`);
+    }
 
     let coverAttr = "";
     const pic = c.picture && c.picture[0];
@@ -82,6 +134,10 @@ for (const f of files) {
       genre && `GENRE="${esc(genre)}"`,
       key && `KEY="${esc(key)}"`,
       dur && `PLAYTIME="${dur}"`,
+      bitrate && `BITRATE="${bitrate}"`,
+      sampleRate && `SAMPLERATE="${sampleRate}"`,
+      `LOSSLESS="${lossless}"`,
+      deepAttrs,
     ]
       .filter(Boolean)
       .join(" ");
@@ -116,3 +172,4 @@ await writeFile(join(publicDir, "collection.local.nml"), xml);
 
 console.log(`Importiert: ${entries.length} Tracks → public/collection.local.nml`);
 console.log(`Cover: ${withCover}/${entries.length} · BPM: ${withBpm} · Key: ${withKey}`);
+if (deep) console.log(`Deep-Scan (LUFS/Peak/HF): ${deepOk}/${entries.length}`);

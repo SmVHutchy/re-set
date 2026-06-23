@@ -3,6 +3,7 @@ import type { Track } from "../lib/nml";
 import type { TrackTags } from "../lib/store/types";
 import { useStore } from "../lib/store/StoreProvider";
 import { PHASES, PHASE_COLOR, VIBE_SUGGESTIONS } from "../lib/tags";
+import { grade, flags, GRADE_COLOR, FLAG_LABEL } from "../lib/quality";
 import { Plus, Check, X, SlidersHorizontal, Play } from "@phosphor-icons/react";
 
 interface Props {
@@ -43,6 +44,20 @@ export function Inspector({ track, tags, inSet, onPreview }: Props) {
           {track.bpm != null && <span>{track.bpm.toFixed(1)} BPM</span>}
           {track.genre && <span className="truncate">· {track.genre}</span>}
         </div>
+        {(track.bitrate != null || track.lossless || track.lufs != null) && (
+          <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[11px] text-ink-faint">
+            <span style={{ color: GRADE_COLOR[grade(track)] }}>
+              {track.lossless ? "lossless" : track.bitrate != null ? `${track.bitrate} kbps` : "—"}
+            </span>
+            {track.lufs != null && <span>· {track.lufs} LUFS</span>}
+            {track.truePeak != null && <span>· peak {track.truePeak}</span>}
+            {flags(track).map((f) => (
+              <span key={f} style={{ color: "var(--color-accent)" }}>
+                {FLAG_LABEL[f]}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
 
       {track.audioPath && (

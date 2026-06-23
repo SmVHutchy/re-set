@@ -2,6 +2,7 @@ import { memo } from "react";
 import type { Track } from "../lib/nml";
 import type { TrackTags } from "../lib/store/types";
 import { PHASE_COLOR, PHASE_LABEL } from "../lib/tags";
+import { badge } from "../lib/quality";
 import { Plus, Check, Play } from "@phosphor-icons/react";
 
 function initials(artist: string): string {
@@ -38,6 +39,7 @@ export const TrackCard = memo(function TrackCard({
 }: Props) {
   const phaseColor = tags.phase ? PHASE_COLOR[tags.phase] : null;
   const active = selectMode ? checked : selected;
+  const qb = badge(track);
 
   return (
     <article className="group flex flex-col">
@@ -94,6 +96,16 @@ export const TrackCard = memo(function TrackCard({
             }}
           >
             {track.keyCamelot}
+          </span>
+        )}
+
+        {!selectMode && qb && (
+          <span
+            className="absolute right-2 top-2 rounded px-1 font-mono text-[10px] font-medium"
+            style={{ background: "var(--color-accent)", color: "var(--color-on-accent)" }}
+            title={qb.flag}
+          >
+            {qb.text}
           </span>
         )}
 

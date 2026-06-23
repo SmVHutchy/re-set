@@ -17,6 +17,7 @@ Detaillierte Historie: `git log --oneline`.
 
 - [x] **Politur-Runde** · Undo/Redo (⌘Z / ⌘⇧Z) · Stats-Verteilung (Phasen/Energie/Genres) in Health · Timeline-Kacheln per Tastatur auswählbar
 - [x] **UX-Runde** · Feedback-Toasts · Tastatur-Shortcuts + ?-Hilfe-Overlay · persistenter Mini-Player (Vorhören beim Blättern) · Onboarding-Banner + Hover-/View-Politur
+- [x] **Audioqualität** · Importer-Tiefenscan (ffmpeg: LUFS/True-Peak/HF-Cutoff) · Quality-Badges auf Covern · Inspector-Quality-Zeile · Health-„Qualität" (Low-Bitrate/Clipping/Transcode-Verdacht/Lautheits-Ausreißer)
 
 ## Als Nächstes (Vorschläge)
 - [ ] **Cover-Wall-Virtualisierung** — flüssig bis 5.000+ Tracks

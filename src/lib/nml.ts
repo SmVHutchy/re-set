@@ -10,6 +10,7 @@ export interface Track {
   keyCamelot: string | null;
   keyRaw: string | null;
   path: string | null;
+  folder: string | null; // Herkunfts-Ordner (Gruppen-Label in der Library)
   rating: number | null;
   coverPath: string | null;
   audioPath: string | null;
@@ -26,6 +27,19 @@ function num(v: string | null): number | null {
   if (v == null || v === "") return null;
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * Gruppen-Label für die Library. Nutzt die FOLDER-Erweiterung unseres Importers,
+ * sonst das letzte Verzeichnis-Segment des Pfads (echte Traktor-Collections).
+ */
+function folderLabel(folderAttr: string | null, path: string | null): string | null {
+  const attr = folderAttr?.trim();
+  if (attr) return attr;
+  if (!path) return null;
+  const dir = path.replace(/[^/]*$/, "").replace(/\/+$/, ""); // Datei ab, Slash ab
+  const seg = dir.split("/").pop();
+  return seg || null;
 }
 
 /**
@@ -58,6 +72,10 @@ export function parseNml(xml: string): Track[] {
           .replace(/\/:/g, "/")
       : null;
 
+    // Gruppen-Label: bevorzugt unsere FOLDER-Erweiterung (MP3-Import), sonst
+    // aus dem LOCATION-Verzeichnis abgeleitet (echte Traktor-Collections).
+    const folder = folderLabel(entry.getAttribute("FOLDER"), path);
+
     const keyRaw = info?.getAttribute("KEY") ?? null;
     const keyValue = num(key?.getAttribute("VALUE") ?? null);
 
@@ -74,6 +92,7 @@ export function parseNml(xml: string): Track[] {
       keyCamelot: toCamelot(keyRaw, keyValue),
       keyRaw,
       path,
+      folder,
       rating: num(info?.getAttribute("RANKING") ?? null),
       // COVERART/AUDIO sind Eigenheiten unseres MP3-Importers; echte Traktor-Dateien
       // haben sie nicht (→ null, Fallback auf getönte Kachel / kein Preview).

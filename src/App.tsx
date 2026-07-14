@@ -17,6 +17,8 @@ import { Logo } from "./components/Logo";
 import { MiniPlayer } from "./components/MiniPlayer";
 import { Toaster } from "./components/Toaster";
 import { HelpOverlay } from "./components/HelpOverlay";
+import { ImportButton } from "./components/ImportButton";
+import { UploadNmlButton } from "./components/UploadNmlButton";
 import {
   GridFour,
   WaveSine,
@@ -32,7 +34,7 @@ import {
 
 type Filter = Phase | "all" | "untagged";
 type View = "library" | "timeline" | "canvas" | "health";
-type SortKey = "order" | "title" | "artist" | "bpm" | "key" | "energy";
+type SortKey = "order" | "folder" | "title" | "artist" | "bpm" | "key" | "energy";
 
 function camelotVal(c: string | null): number {
   if (!c) return Infinity;
@@ -46,6 +48,8 @@ const numCmp = (x: number, y: number) => (x === y ? 0 : x - y);
 
 function cmpTracks(a: Track, b: Track, key: SortKey, state: PersistState): number {
   switch (key) {
+    case "folder":
+      return (a.folder ?? "").localeCompare(b.folder ?? "") || a.title.localeCompare(b.title);
     case "title":
       return a.title.localeCompare(b.title);
     case "artist":
@@ -80,7 +84,9 @@ export function App() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [view, setView] = useState<View>("library");
   const [search, setSearch] = useState("");
-  const [sortKey, setSortKey] = useState<SortKey>("order");
+  const [sortKey, setSortKey] = useState<SortKey>(
+    () => (localStorage.getItem("reset.sort") as SortKey) || "order",
+  );
   const [selectMode, setSelectMode] = useState(false);
   const [selection, setSelection] = useState<Set<string>>(new Set());
   const [activeCrateId, setActiveCrateId] = useState<string | null>(null);
@@ -106,6 +112,11 @@ export function App() {
       alive = false;
     };
   }, []);
+
+  // Sortier-/Gruppierwahl merken — u.a. damit „Ordner" nach dem Import aktiv bleibt.
+  useEffect(() => {
+    localStorage.setItem("reset.sort", sortKey);
+  }, [sortKey]);
 
   const trackById = useMemo(() => {
     const m = new Map<string, Track>();
@@ -249,6 +260,8 @@ export function App() {
           </ViewTab>
         </div>
         <div className="ml-auto flex items-center gap-2">
+          <UploadNmlButton />
+          <ImportButton />
           <div className="flex items-center gap-0.5">
             <HeaderIconBtn label="Rückgängig (⌘Z)" disabled={!canUndo} onClick={() => dispatch({ type: "undo" })}>
               <ArrowUUpLeft size={15} weight="regular" />
@@ -326,6 +339,7 @@ export function App() {
               className="h-8 rounded-md border border-line bg-base px-2 text-[12px] text-ink outline-none focus:border-line-strong"
             >
               <option value="order">hinzugefügt</option>
+              <option value="folder">Ordner</option>
               <option value="title">Titel</option>
               <option value="artist">Artist</option>
               <option value="bpm">BPM</option>
@@ -370,6 +384,7 @@ export function App() {
                 error={error}
                 selectMode={selectMode}
                 selection={selection}
+                groupByFolder={sortKey === "folder"}
                 onSelect={onSelect}
                 onAdd={onAdd}
                 onToggle={onToggle}

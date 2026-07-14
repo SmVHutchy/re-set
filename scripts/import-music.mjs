@@ -5,7 +5,7 @@ import { parseFile } from "music-metadata";
 import { readdir, mkdir, writeFile, copyFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
-import { join, extname, basename, resolve } from "node:path";
+import { join, extname, basename, dirname, resolve, relative } from "node:path";
 
 const AUDIO = new Set([".mp3", ".aiff", ".aif", ".flac", ".wav", ".m4a", ".ogg"]);
 
@@ -69,9 +69,19 @@ const extFor = (fmt) => {
   return "jpg";
 };
 
-const files = (await readdir(root))
-  .filter((f) => AUDIO.has(extname(f).toLowerCase()))
+// Zeilenweises Log auf stdout — der Server streamt jede Zeile live in die UI.
+const log = (m) => process.stdout.write(m + "\n");
+
+// Rekursiv: Unterordner werden mitgenommen, damit die Ordner-Struktur erhalten
+// bleibt (relative Pfade zur Wurzel, POSIX-Separatoren für stabile Labels).
+const rootName = basename(root) || root;
+log(`Scanne Ordner "${rootName}" …`);
+const files = (await readdir(root, { recursive: true }))
+  .map((p) => p.replace(/\\/g, "/"))
+  .filter((p) => AUDIO.has(extname(p).toLowerCase()))
   .sort();
+log(`${files.length} Audiodatei${files.length === 1 ? "" : "en"} gefunden.`);
+if (deep) log("Deep-Scan aktiv (LUFS/Peak/HF) — das dauert etwas länger.");
 
 const entries = [];
 let withCover = 0;
@@ -81,6 +91,11 @@ let deepOk = 0;
 
 for (const [idx, f] of files.entries()) {
   const full = join(root, f);
+  // Ordner der Datei (absolut, für LOCATION) + Label relativ zur Import-Wurzel.
+  const fileDir = dirname(full).replace(/\\/g, "/");
+  const relDir = dirname(f) === "." ? "" : dirname(f);
+  const folder = relDir ? `${rootName}/${relDir}` : rootName;
+  const fileName = basename(f);
   try {
     const md = await parseFile(full);
     const c = md.common ?? {};
@@ -98,8 +113,10 @@ for (const [idx, f] of files.entries()) {
     const hash = createHash("sha1").update(full).digest("hex").slice(0, 12);
 
     let deepAttrs = "";
+    let d = null;
     if (deep) {
-      const d = deepScan(full);
+      log(`[${idx + 1}/${files.length}] ${f} — Deep-Scan …`);
+      d = deepScan(full);
       deepAttrs = [
         d.lufs && `LUFS="${d.lufs}"`,
         d.peak && `TRUEPEAK="${d.peak}"`,
@@ -108,7 +125,6 @@ for (const [idx, f] of files.entries()) {
         .filter(Boolean)
         .join(" ");
       if (d.lufs) deepOk++;
-      process.stdout.write(`  Deep-Scan ${idx + 1}/${files.length}\r`);
     }
 
     let coverAttr = "";
@@ -146,16 +162,29 @@ for (const [idx, f] of files.entries()) {
       ? `\n    <TEMPO BPM="${bpm}.000000" BPM_QUALITY="100.000000"></TEMPO>`
       : "";
 
+    // FOLDER ist unsere eigene Erweiterung (wie COVERART/AUDIO) und trägt das
+    // Gruppen-Label für die Library-Ansicht.
+    // FOLDER ist unsere eigene Erweiterung (wie COVERART/AUDIO) und trägt das
+    // Gruppen-Label für die Library-Ansicht.
     entries.push(
-      `  <ENTRY TITLE="${esc(title)}" ARTIST="${esc(artist)}"${coverAttr}${audioAttr}>` +
-        `\n    <LOCATION DIR="${esc(root)}/" FILE="${esc(f)}" VOLUME=""></LOCATION>` +
+      `  <ENTRY TITLE="${esc(title)}" ARTIST="${esc(artist)}"${coverAttr}${audioAttr} FOLDER="${esc(folder)}">` +
+        `\n    <LOCATION DIR="${esc(fileDir)}/" FILE="${esc(fileName)}" VOLUME=""></LOCATION>` +
         albumNode +
         infoNode +
         tempoNode +
         `\n  </ENTRY>`,
     );
+
+    // Kompakte Ergebniszeile pro Track fürs Live-Log.
+    const facts = [
+      bpm ? `BPM ${bpm}` : null,
+      key ? `Key ${key}` : null,
+      pic && pic.data ? "Cover" : null,
+      d && d.lufs ? `LUFS ${d.lufs}` : null,
+    ].filter(Boolean);
+    log(`[${idx + 1}/${files.length}] ${folder}/${fileName} — ${facts.join(" · ") || "nur Basis-Tags"}`);
   } catch (e) {
-    console.warn("übersprungen:", f, "—", e.message);
+    log(`[${idx + 1}/${files.length}] ${f} — übersprungen: ${e.message}`);
   }
 }
 

@@ -1,0 +1,19 @@
+node_modules
+.git
+dist
+.env
+.env.local
+npm-debug.log
+*.log
+.DS_Store
+
+# macOS AppleDouble-Reste
+**/._*
+
+# Lokal importierte Library nicht ins Image backen — kommt zur Laufzeit ins Volume.
+public/audio
+public/covers
+public/collection.local.nml
+
+# Lokaler Musik-Bind-Mount
+music

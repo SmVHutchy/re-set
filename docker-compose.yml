@@ -1,0 +1,20 @@
+services:
+  reset:
+    build: .
+    container_name: reset
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      # Import-Quelle(n) im Container. Mehrere Pfade komma-separiert.
+      - MUSIC_PATH=/music
+    volumes:
+      # Musik hier ablegen (nur lesend — die Quelle wird nie verändert).
+      - ./music:/music:ro
+      # Importierte Library (collection.local.nml, covers/, audio/) persistent halten.
+      - reset-data:/app/public
+    restart: unless-stopped
+
+volumes:
+  reset-data:

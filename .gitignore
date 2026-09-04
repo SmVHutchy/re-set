@@ -10,3 +10,10 @@ dist-ssr
 public/collection.local.nml
 public/covers/
 public/audio/
+
+# Lokale Musik-Ordner-Konfiguration (Rechner-spezifische Pfade)
+.music-sources.json
+public/collections/
+
+# Claude-Code-Arbeitsverzeichnis (Worktrees, lokale Sessions)
+.claude/

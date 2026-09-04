@@ -78,7 +78,14 @@ const rootName = basename(root) || root;
 log(`Scanne Ordner "${rootName}" …`);
 const files = (await readdir(root, { recursive: true }))
   .map((p) => p.replace(/\\/g, "/"))
-  .filter((p) => AUDIO.has(extname(p).toLowerCase()))
+  .filter((p) => {
+    const name = basename(p);
+    // Versteckte Dateien überspringen — vor allem macOS-AppleDouble-Reste
+    // ("._song.mp3"): winzige Metadaten-Zwillinge mit echter .mp3-Endung, die
+    // sonst als nicht abspielbare Phantom-Tracks in der Library landen.
+    if (name.startsWith(".")) return false;
+    return AUDIO.has(extname(name).toLowerCase());
+  })
   .sort();
 log(`${files.length} Audiodatei${files.length === 1 ? "" : "en"} gefunden.`);
 if (deep) log("Deep-Scan aktiv (LUFS/Peak/HF) — das dauert etwas länger.");

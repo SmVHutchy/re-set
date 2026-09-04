@@ -61,9 +61,11 @@ Empfohlene Reihenfolge: **B → A → C → D → E.** B zuerst, weil ohne BPM u
 
 ### AP-B — Analyse: BPM und Key *(zuerst)*
 
-> **Auftrag:** Downloads von Spotify und SoundCloud tragen keine BPM- und Key-Tags. `scripts/import-music.mjs:113` liest beides nur aus vorhandenen Tags, findet nichts, und damit laufen `compat.ts`, `autoset.ts` und die Energie-Timeline auf leeren Feldern. Schließe diese Lücke.
+> **Auftrag:** 76,3 % der Download-Sammlung tragen weder BPM- noch Key-Tag (gemessen, siehe `UNIFIED-PIPELINE.md` §6.0), und `import-music.mjs:113` liest beides nur aus Tags. Damit laufen `compat.ts`, `autoset.ts` und die Energie-Timeline auf dem Großteil der Bibliothek leer. Schließe diese Lücke — in zwei Stufen, die billige zuerst.
 >
-> **Bauen:**
+> **Stufe 1 — Open Key parsen (kein librosa nötig):** Die vorhandenen Key-Tags stehen durchgängig in Open-Key-Notation (`1m`–`12m` = Moll, `1d`–`12d` = Dur). `toCamelot()` in `src/lib/camelot.ts` erkennt sie nicht und verwirft sie, obwohl der Wert in der Datei steht — betrifft rund ein Viertel der Sammlung. Open Key nach Camelot ist eine reine Umbenennung: dieselbe Zahl, `m` → `A`, `d` → `B`. Ergänzen, testen, fertig. **Diese Stufe zuerst, sie kostet Minuten und schließt ein Viertel der Lücke.**
+>
+> **Stufe 2 — Analyse bauen:**
 > - `scripts/analyze.py`, ausgeführt in der uv-Umgebung von SpotifyDL (`H:\Projekte\SpotifyDL\bin\uv.exe run python …`). Eingabe: Dateipfade als Argumente oder über stdin. Ausgabe: **eine JSON-Zeile pro Datei** auf stdout, damit der Server sie wie jeden anderen Kindprozess-Log zeilenweise streamen kann:
 >   ```json
 >   {"file":"…","bpm":174.0,"bpm_confidence":0.94,"key":"F#m","camelot":"11A","key_confidence":0.71}
@@ -75,7 +77,9 @@ Empfohlene Reihenfolge: **B → A → C → D → E.** B zuerst, weil ohne BPM u
 > - Cache über `Pfad|mtime|size` (Muster `coverCache`, `server.mjs:348`) — Analyse ist zu teuer, um sie zu wiederholen.
 > - `POST /api/analyze` als NDJSON-Endpunkt, gebaut wie `/api/import`.
 >
-> **Fertig, wenn:** `node scripts/import-music.mjs "<Ordner>" --analyze` auf ~20 taglose Tracks BPM und Key setzt · die BPM-Werte mit Traktors eigener Analyse übereinstimmen · die Key-Trefferquote an einer Stichprobe **gemessen und in `docs/UNIFIED-PIPELINE.md` notiert** ist · geschätzte Werte in der UI als geschätzt erkennbar sind · `npm run typecheck && npm run build` grün.
+> **Blindtest-Protokoll:** Die 497 Tracks mit Traktor-Analyse tragen die Werte inzwischen selbst als Tag — ein Test darauf würde die Antwort ablesen. Gemessen wird deshalb auf **tagfreien Kopien** (`ffmpeg -map_metadata -1 -c copy`) mit der Erwartung in einer danebenliegenden `expected.json`. Ein fertiger Satz liegt bereit: 29 Tracks über 12 BPM-Bänder von 71 bis 190 BPM. Auswertung: BPM als exakter Treffer / Halb- oder Doppeltempo / falsch, Key als Treffer / Parallele (relative Dur-Moll) / falsch. **Beide Quoten gehören nach `docs/UNIFIED-PIPELINE.md` §6.0**, mit Datum und Stichprobengröße.
+>
+> **Fertig, wenn:** Stufe 1 zeigt Keys für die bereits getaggten Tracks · `node scripts/import-music.mjs "<Ordner>" --analyze` setzt BPM und Key für taglose Tracks · der Blindtest ist gelaufen und **beide Trefferquoten sind notiert** · geschätzte Werte sind in der UI als geschätzt erkennbar · `npm run typecheck && npm run build` grün.
 >
 > **Nicht:** kein eigenes Analyse-UI, keine Stimmungs-/Genre-Erkennung, kein Schreiben in Audiodateien.
 

@@ -154,6 +154,31 @@ Die Format- und Bitratenmatrix ist in `H:\Projekte\SpotifyDL\dashboard.py:96` (`
 
 ## 6. Analyse: BPM und Key
 
+### 6.0 Gemessen, nicht geschätzt (2026-09-04)
+
+Grundlage: die echte `collection.nml` (Traktor Pro 4, `NML VERSION="20"`, 4701 Einträge) gegen `H:\Projekte\SpotifyDL\Downloads` (4738 Audiodateien).
+
+| Messung | Ergebnis |
+|---|---|
+| Collection-Einträge, deren Datei in `SpotifyDL/Downloads` liegt | **4675 von 4701** — die Traktor-Library *ist* praktisch die Download-Sammlung |
+| Dateien ohne BPM- **und** ohne Key-Tag (Stichprobe 300) | **76,3 %** — rund 3.600 Tracks |
+| Dateien mit beidem | 23,7 % |
+| Tracks mit Traktor-Analyse (`TEMPO` + `MUSICAL_KEY`) | 497 mit auffindbarer Datei |
+| Traktor-BPM gegen Datei-Tag | 411 identisch (< 0,01), 86 innerhalb 1,0, **0 Abweichungen ≥ 1,0** → Traktor hat seine Werte in die Dateien zurückgeschrieben |
+| Einträge mit Cues | 562 |
+
+Zwei Konsequenzen, die den Auftrag ändern:
+
+**a) Die 497 analysierten Tracks sind die Grundwahrheit — aber nicht direkt testbar.** Sie tragen Traktors Werte inzwischen selbst als Tag; ein Analysator würde die Antwort ablesen statt sie zu berechnen. Der Test läuft deshalb blind auf **tagfreien Kopien** (`ffmpeg -map_metadata -1 -c copy`), die Erwartung liegt daneben in einer `expected.json`. Ein solcher Satz existiert: 29 Tracks über 12 BPM-Bänder von 71 bis 190 BPM, verifiziert taglos und lesbar.
+
+**b) Die Key-Tags sind in Open-Key-Notation — und werden heute verworfen.** Alle 497 Datei-Keys stehen als `1m`–`12m` / `1d`–`12d` (`11m`: 55×, `10m`: 55×, `1m`: 51× …). `toCamelot()` in `src/lib/camelot.ts` prüft gegen `CAMELOT_RE` (`^(1[0-2]|[1-9])[ABab]$`) und `NAME_TO_CAMELOT` (klassische Namen) — Open Key trifft weder das eine noch das andere, und `MUSICAL_KEY` gibt es bei importierten Ordnern nicht. Ergebnis: bei rund einem Viertel der Sammlung ist der Key in der Datei vorhanden und wird trotzdem als „fehlt" angezeigt.
+
+Das ist kein Analyse-, sondern ein Parser-Problem: **ein Viertel der Lücke schließt sich durch eine Tabellenzeile, nicht durch librosa.** Erst danach lohnt sich die teure Analyse für den Rest.
+
+> `nml.ts` wurde laut `AGENTS.md` gegen NML v19 getestet; die vorliegende Collection ist **v20**. Beim Roundtrip (AP-C) gegen v20 gegenprüfen.
+
+### 6.1 Der Analysator
+
 `scripts/analyze.py` läuft in der uv-Umgebung von SpotifyDL und gibt JSON-Zeilen aus:
 
 ```json

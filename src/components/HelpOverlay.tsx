@@ -3,7 +3,8 @@ const ROWS: [string, string][] = [
   ["1 – 4", "Phase setzen (pre / mid / peak / late)"],
   ["0", "Phase entfernen"],
   ["+", "Ausgewählten Track ins Set"],
-  ["Leertaste", "Ausgewählten Track vorhören"],
+  ["Ziehen", "Kachel ins Set-Panel droppen"],
+  ["Leertaste", "Vorhören starten / stoppen"],
   ["/", "Suche fokussieren"],
   ["?", "Diese Hilfe ein/aus"],
 ];

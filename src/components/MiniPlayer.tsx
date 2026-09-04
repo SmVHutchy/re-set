@@ -13,12 +13,14 @@ export function MiniPlayer({ track, onClose }: { track: Track | null; onClose: (
   const wsRef = useRef<WaveSurfer | null>(null);
   const [playing, setPlaying] = useState(false);
   const [ready, setReady] = useState(false);
+  const [failed, setFailed] = useState(false);
   const src = track?.audioPath ?? null;
 
   useEffect(() => {
     if (!containerRef.current || !src) return;
     setReady(false);
     setPlaying(false);
+    setFailed(false);
     const ws = WaveSurfer.create({
       container: containerRef.current,
       height: 36,
@@ -38,6 +40,12 @@ export function MiniPlayer({ track, onClose }: { track: Track | null; onClose: (
     ws.on("play", () => setPlaying(true));
     ws.on("pause", () => setPlaying(false));
     ws.on("finish", () => setPlaying(false));
+    // Datei nicht erreichbar (404 vom /api/audio, Platte ab, Format) → nicht
+    // ewig „Lädt…", sondern klaren Hinweis zeigen.
+    ws.on("error", () => {
+      setFailed(true);
+      setReady(false);
+    });
     return () => {
       try {
         ws.destroy();
@@ -57,7 +65,14 @@ export function MiniPlayer({ track, onClose }: { track: Track | null; onClose: (
     >
       <div className="mx-auto flex max-w-[1400px] items-center gap-3">
         {track.coverPath && (
-          <img src={track.coverPath} alt="" className="h-9 w-9 flex-none rounded object-cover" />
+          <img
+            src={track.coverPath}
+            alt=""
+            onError={(e) => {
+              e.currentTarget.style.display = "none";
+            }}
+            className="h-9 w-9 flex-none rounded object-cover"
+          />
         )}
         <div className="w-40 flex-none">
           <div className="truncate text-[12px] font-medium text-ink">{track.title}</div>
@@ -72,7 +87,12 @@ export function MiniPlayer({ track, onClose }: { track: Track | null; onClose: (
         >
           {playing ? <Pause size={14} weight="fill" /> : <Play size={14} weight="fill" />}
         </button>
-        <div ref={containerRef} className="min-w-0 flex-1" />
+        <div ref={containerRef} className="min-w-0 flex-1" hidden={failed} />
+        {failed && (
+          <div className="min-w-0 flex-1 truncate text-[12px] text-ink-faint">
+            Datei nicht gefunden — Musik-Ordner unter „Geladene Ordner verwalten" eintragen.
+          </div>
+        )}
         <button
           onClick={onClose}
           aria-label="Player schließen"

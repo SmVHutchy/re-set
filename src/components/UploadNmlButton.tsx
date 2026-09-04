@@ -21,22 +21,31 @@ export function UploadNmlButton() {
         setBusy(false);
         return;
       }
-      const res = await fetch("/api/upload-nml", {
+      const name = file.name.replace(/\.nml$/i, "");
+      const res = await fetch(`/api/upload-nml?name=${encodeURIComponent(name)}`, {
         method: "POST",
         headers: { "Content-Type": "application/xml" },
         body: xml,
       });
       if (res.ok) {
-        toast("Collection geladen");
+        toast(`Ordner „${name}" hinzugefügt`);
         setTimeout(() => window.location.reload(), 1000);
       } else {
-        const err = await res.json().catch(() => ({ error: "Upload fehlgeschlagen" }));
-        toast(err.error || "Upload fehlgeschlagen");
+        // Steht der Import-Server (npm run server) nicht, liefert der Vite-Proxy
+        // 502/504 mit HTML statt JSON → das ist keine „ungültige Datei", sondern
+        // eine fehlende Verbindung. Handlungsleitend melden.
+        const err = await res.json().catch(() => null);
+        toast(
+          err?.error ??
+            (res.status === 502 || res.status === 503 || res.status === 504
+              ? "Import-Server nicht erreichbar — läuft „npm run server\"?"
+              : `Upload fehlgeschlagen (${res.status})`),
+        );
         setBusy(false);
       }
     } catch (err) {
       console.error(err);
-      toast("Netzwerkfehler");
+      toast("Import-Server nicht erreichbar — läuft „npm run server\"?");
       setBusy(false);
     }
   };

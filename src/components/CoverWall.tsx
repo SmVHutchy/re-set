@@ -1,9 +1,10 @@
+import { useState } from "react";
 import type { Track } from "../lib/nml";
 import type { PersistState } from "../lib/store/types";
 import { EMPTY_TAGS } from "../lib/store/types";
 import { getTags } from "../lib/store/StoreProvider";
 import { TrackCard } from "./TrackCard";
-import { MagnifyingGlass, Folder } from "@phosphor-icons/react";
+import { MagnifyingGlass, Folder, CaretRight } from "@phosphor-icons/react";
 
 const GRID_STYLE = { gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))" };
 
@@ -69,6 +70,9 @@ export function CoverWall({
   onToggle,
   onPreview,
 }: Props) {
+  // Eingeklappte Ordner (nur Session, pro Ordner-Label). Toggle in der Kopfzeile.
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+
   if (loading) return <SkeletonGrid />;
 
   if (error) {
@@ -113,20 +117,58 @@ export function CoverWall({
   );
 
   if (groupByFolder) {
+    const groups = groupByFolderLabel(tracks);
+    const toggle = (folder: string) =>
+      setCollapsed((prev) => {
+        const n = new Set(prev);
+        if (n.has(folder)) n.delete(folder);
+        else n.add(folder);
+        return n;
+      });
+    const allCollapsed = collapsed.size >= groups.length;
+
     return (
       <div className="flex flex-col gap-8">
-        {groupByFolderLabel(tracks).map((g) => (
-          <section key={g.folder}>
-            <div className="mb-3 flex items-center gap-2 border-b border-line pb-2">
-              <Folder size={15} weight="regular" className="flex-none text-ink-faint" />
-              <h3 className="truncate text-[13px] font-medium text-ink">{g.folder}</h3>
-              <span className="font-mono text-[11px] text-ink-faint">{g.items.length}</span>
-            </div>
-            <div className="grid gap-x-4 gap-y-5" style={GRID_STYLE}>
-              {g.items.map(card)}
-            </div>
-          </section>
-        ))}
+        {groups.length > 1 && (
+          <div className="-mb-4 flex items-center gap-3">
+            <span className="font-mono text-[11px] text-ink-faint">{groups.length} Ordner</span>
+            <button
+              onClick={() =>
+                setCollapsed(allCollapsed ? new Set() : new Set(groups.map((g) => g.folder)))
+              }
+              className="text-[12px] text-ink-soft transition-colors hover:text-ink"
+            >
+              {allCollapsed ? "alle ausklappen" : "alle einklappen"}
+            </button>
+          </div>
+        )}
+        {groups.map((g) => {
+          const isOpen = !collapsed.has(g.folder);
+          return (
+            <section key={g.folder}>
+              <button
+                onClick={() => toggle(g.folder)}
+                aria-expanded={isOpen}
+                className="mb-3 flex w-full items-center gap-2 border-b border-line pb-2 text-left transition-colors hover:border-line-strong"
+              >
+                <CaretRight
+                  size={13}
+                  weight="bold"
+                  className="flex-none text-ink-faint transition-transform"
+                  style={{ transform: isOpen ? "rotate(90deg)" : "none" }}
+                />
+                <Folder size={15} weight="regular" className="flex-none text-ink-faint" />
+                <h3 className="truncate text-[13px] font-medium text-ink">{g.folder}</h3>
+                <span className="font-mono text-[11px] text-ink-faint">{g.items.length}</span>
+              </button>
+              {isOpen && (
+                <div className="grid gap-x-4 gap-y-5" style={GRID_STYLE}>
+                  {g.items.map(card)}
+                </div>
+              )}
+            </section>
+          );
+        })}
       </div>
     );
   }

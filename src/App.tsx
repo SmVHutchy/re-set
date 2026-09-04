@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { parseNml, type Track } from "./lib/nml";
 import { PHASES, PHASE_COLOR, type Phase } from "./lib/tags";
 import { useStore, getTags, activeSet } from "./lib/store/StoreProvider";
@@ -14,11 +14,11 @@ import { HealthView } from "./components/HealthView";
 import { crateMatches } from "./lib/smartcrate";
 import { toast } from "./lib/toast";
 import { Logo } from "./components/Logo";
-import { MiniPlayer } from "./components/MiniPlayer";
 import { Toaster } from "./components/Toaster";
 import { HelpOverlay } from "./components/HelpOverlay";
 import { ImportButton } from "./components/ImportButton";
 import { UploadNmlButton } from "./components/UploadNmlButton";
+import { LibraryManager } from "./components/LibraryManager";
 import {
   GridFour,
   WaveSine,
@@ -29,8 +29,15 @@ import {
   ArrowUUpLeft,
   ArrowUUpRight,
   Question,
+  Folders,
   X,
 } from "@phosphor-icons/react";
+
+// Lazy: zieht wavesurfer.js in einen eigenen Chunk, der erst beim ersten
+// Vorhören geladen wird (spart ~kB im initialen Bundle).
+const MiniPlayer = lazy(() =>
+  import("./components/MiniPlayer").then((m) => ({ default: m.MiniPlayer })),
+);
 
 type Filter = Phase | "all" | "untagged";
 type View = "library" | "timeline" | "canvas" | "health";
@@ -65,12 +72,44 @@ function cmpTracks(a: Track, b: Track, key: SortKey, state: PersistState): numbe
   }
 }
 
-// Bevorzugt die lokal importierte Library (MP3-Import / echte .nml),
-// fällt sonst auf die mitgelieferte Beispiel-Fixture zurück.
-async function loadCollection(): Promise<string> {
+// Führt alle geladenen Ordner (collections/* + Alt-Datei) zu einer Library
+// zusammen — deduped per Track-ID (= Pfad), damit ein Track in mehreren NMLs
+// nur einmal auftaucht. Fällt ohne Server/Ordner auf die Beispiel-Fixture zurück.
+async function loadLibrary(): Promise<Track[]> {
+  try {
+    const r = await fetch("/api/collections");
+    if (r.ok) {
+      const cols: { file: string }[] = await r.json();
+      if (cols.length) {
+        const lists = await Promise.all(
+          cols.map(async (c) => {
+            try {
+              const x = await fetch(`/${c.file}`);
+              return x.ok ? parseNml(await x.text()) : [];
+            } catch {
+              return []; // eine kaputte/ungültige Datei darf den Merge nicht killen
+            }
+          }),
+        );
+        const seen = new Set<string>();
+        const merged: Track[] = [];
+        for (const list of lists) {
+          for (const t of list) {
+            if (!seen.has(t.id)) {
+              seen.add(t.id);
+              merged.push(t);
+            }
+          }
+        }
+        if (merged.length) return merged;
+      }
+    }
+  } catch {
+    // kein Server / kein /api → Einzeldatei-Fallback
+  }
   for (const url of ["/collection.local.nml", "/collection.sample.nml"]) {
     const r = await fetch(url);
-    if (r.ok) return r.text();
+    if (r.ok) return parseNml(await r.text());
   }
   throw new Error("Keine collection.nml gefunden.");
 }
@@ -92,15 +131,16 @@ export function App() {
   const [activeCrateId, setActiveCrateId] = useState<string | null>(null);
   const [previewId, setPreviewId] = useState<string | null>(null);
   const [showHelp, setShowHelp] = useState(false);
+  const [showLibrary, setShowLibrary] = useState(false);
   const [onboarded, setOnboarded] = useState(() => localStorage.getItem("reset.onboarded") === "1");
   const searchRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     let alive = true;
-    loadCollection()
-      .then((xml) => {
+    loadLibrary()
+      .then((list) => {
         if (!alive) return;
-        setTracks(parseNml(xml));
+        setTracks(list);
         setLoading(false);
       })
       .catch((e: unknown) => {
@@ -173,7 +213,9 @@ export function App() {
       }
       if (e.key === " ") {
         e.preventDefault();
-        if (trackById.get(selectedId)?.audioPath) setPreviewId(selectedId);
+        if (!trackById.get(selectedId)?.audioPath) return;
+        // Toggle: derselbe Track → Vorschau stoppen, sonst starten.
+        setPreviewId((cur) => (cur === selectedId ? null : selectedId));
         return;
       }
     };
@@ -181,11 +223,11 @@ export function App() {
     return () => window.removeEventListener("keydown", onKey);
   }, [dispatch, selectedId, trackById]);
 
-  const setIds = useMemo(() => new Set(activeSet(state).trackIds), [state]);
+  const setIds = useMemo(() => new Set(activeSet(state).trackIds), [state.sets, state.activeSetId]);
 
   const taggedCount = useMemo(
     () => tracks.reduce((n, t) => n + (isTagged(getTags(state, t.id)) ? 1 : 0), 0),
-    [tracks, state],
+    [tracks, state.tags],
   );
 
   const shown = useMemo(() => {
@@ -206,7 +248,10 @@ export function App() {
       list = [...list].sort((a, b) => cmpTracks(a, b, sortKey, state));
     }
     return list;
-  }, [tracks, filter, search, sortKey, state, activeCrateId]);
+    // Bewusst nur state.tags/smartCrates statt des ganzen state: Set-Aktionen
+    // (addToSet, reorder…) ändern state.sets und sollen die Library NICHT neu
+    // filtern/sortieren.
+  }, [tracks, filter, search, sortKey, state.tags, state.smartCrates, activeCrateId]);
 
   const onSelect = useCallback((id: string) => setSelectedId(id), []);
   const onAdd = useCallback(
@@ -262,6 +307,13 @@ export function App() {
         <div className="ml-auto flex items-center gap-2">
           <UploadNmlButton />
           <ImportButton />
+          <button
+            onClick={() => setShowLibrary(true)}
+            title="Geladene Ordner verwalten"
+            className="flex h-8 items-center gap-1.5 rounded-md border border-line bg-base px-2.5 text-[12px] font-medium text-ink-soft transition-colors hover:text-ink"
+          >
+            <Folders size={14} weight="regular" /> Ordner
+          </button>
           <div className="flex items-center gap-0.5">
             <HeaderIconBtn label="Rückgängig (⌘Z)" disabled={!canUndo} onClick={() => dispatch({ type: "undo" })}>
               <ArrowUUpLeft size={15} weight="regular" />
@@ -392,7 +444,15 @@ export function App() {
               />
             </main>
 
-            <aside className="flex flex-col gap-6 self-start lg:sticky lg:top-6">
+            {/* Sticky-Sidebar mit EIGENEM Scrollbereich: Inspector + Set sind oft
+                höher als der Viewport — ohne max-h/overflow wäre alles unterhalb
+                der Bildschirmkante unerreichbar. Ist der MiniPlayer offen, endet
+                der Bereich über ihm (8rem ≈ top-Offset + Player-Höhe). */}
+            <aside
+              className={`flex flex-col gap-6 self-start lg:sticky lg:top-6 lg:overflow-y-auto lg:overscroll-contain lg:[scrollbar-width:thin] ${
+                previewTrack ? "lg:max-h-[calc(100dvh-8rem)]" : "lg:max-h-[calc(100dvh-3rem)]"
+              }`}
+            >
               <Inspector
                 track={selectedTrack}
                 tags={selectedTrack ? getTags(state, selectedTrack.id) : { energy: null, phase: null, vibe: [] }}
@@ -454,8 +514,13 @@ export function App() {
       </footer>
 
       <Toaster />
-      <MiniPlayer track={previewTrack} onClose={() => setPreviewId(null)} />
+      {previewTrack && (
+        <Suspense fallback={null}>
+          <MiniPlayer track={previewTrack} onClose={() => setPreviewId(null)} />
+        </Suspense>
+      )}
       {showHelp && <HelpOverlay onClose={() => setShowHelp(false)} />}
+      {showLibrary && <LibraryManager onClose={() => setShowLibrary(false)} />}
     </div>
   );
 }

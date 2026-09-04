@@ -1,9 +1,9 @@
-import { memo } from "react";
+import { memo, useState } from "react";
 import type { Track } from "../lib/nml";
 import type { TrackTags } from "../lib/store/types";
 import { PHASE_COLOR, PHASE_LABEL } from "../lib/tags";
 import { badge } from "../lib/quality";
-import { Plus, Check, Play } from "@phosphor-icons/react";
+import { Plus, Check, Play, Playlist } from "@phosphor-icons/react";
 
 function initials(artist: string): string {
   const parts = artist.split(/\s+/).filter(Boolean);
@@ -40,9 +40,22 @@ export const TrackCard = memo(function TrackCard({
   const phaseColor = tags.phase ? PHASE_COLOR[tags.phase] : null;
   const active = selectMode ? checked : selected;
   const qb = badge(track);
+  // coverPath ist bei echten Traktor-Tracks eine /api/cover-URL, die 404 liefert,
+  // wenn die MP3 kein eingebettetes Bild hat → dann auf die Initialen-Kachel zurück.
+  const [imgError, setImgError] = useState(false);
+  const showCover = !!track.coverPath && !imgError;
 
   return (
-    <article className="group flex flex-col">
+    <article
+      className="group flex flex-col"
+      // Ziehen der Kachel ins Set-Panel (Drop-Ziel dort). Im Auswahlmodus aus,
+      // damit das Anhaken nicht mit dem Ziehen kollidiert.
+      draggable={!selectMode}
+      onDragStart={(e) => {
+        e.dataTransfer.setData("application/x-reset-track", track.id);
+        e.dataTransfer.effectAllowed = "copy";
+      }}
+    >
       <div className="relative">
       <button
         onClick={() => (selectMode ? onToggle(track.id) : onSelect(track.id))}
@@ -55,11 +68,12 @@ export const TrackCard = memo(function TrackCard({
             : "var(--color-surface)",
         }}
       >
-        {track.coverPath ? (
+        {showCover ? (
           <img
-            src={track.coverPath}
+            src={track.coverPath!}
             alt=""
             loading="lazy"
+            onError={() => setImgError(true)}
             className="absolute inset-0 h-full w-full object-cover"
           />
         ) : (
@@ -148,6 +162,18 @@ export const TrackCard = memo(function TrackCard({
             <span>·</span>
             <span>{tags.energy != null ? `E${tags.energy}` : "E–"}</span>
           </div>
+          {track.playlists.length > 0 && (
+            <div
+              className="mt-1 flex items-center gap-1 text-[11px] text-ink-faint"
+              title={`Playlist: ${track.playlists.join(", ")}`}
+            >
+              <Playlist size={12} weight="regular" className="flex-none" />
+              <span className="truncate">{track.playlists[0]}</span>
+              {track.playlists.length > 1 && (
+                <span className="flex-none">+{track.playlists.length - 1}</span>
+              )}
+            </div>
+          )}
         </div>
         {!selectMode && (
           <button

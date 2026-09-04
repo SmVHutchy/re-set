@@ -13,7 +13,7 @@ Zwei Projekte decken heute je eine Hälfte des Workflows ab und wissen nichts vo
 | | **SpotifyDL** (`H:\Projekte\SpotifyDL`) | **Re:SET** (dieses Repo) |
 |---|---|---|
 | Stack | Python 3.12 via `uv`, `dashboard.py` (Einzeldatei-HTTP-Server) | React 19 + Vite + Tailwind v4, Express (`scripts/server.mjs`) |
-| Kann | spotdl (Spotify) · streamrip (SoundCloud/Tidal/Qobuz/Deezer) · Format- und Bitratenwahl · `organizer.py` sortiert nach Tags · `overnight.py` für Batch-Läufe | NML lesen · Cover-Wall · Tagging · Energie-Timeline · Set-Canvas · Smart-Crates · Health · Auto-Set · **NML-Export** · Audio-/Cover-Streaming |
+| Kann | spotdl (Spotify) · **yt-dlp (SoundCloud)** · streamrip (Tidal/Qobuz/Deezer) · Format- und Bitratenwahl · `organizer.py` sortiert nach Tags · `overnight.py` für Batch-Läufe | NML lesen · Cover-Wall · Tagging · Energie-Timeline · Set-Canvas · Smart-Crates · Health · Auto-Set · **NML-Export** · Audio-/Cover-Streaming |
 | Kann nicht | BPM/Key, Traktor, Planung | Herunterladen, BPM/Key berechnen, in `collection.nml` zurückschreiben |
 
 Die einzige Verbindung ist heute ein Pfad-String in `.music-sources.json`:
@@ -33,7 +33,7 @@ const bpm = c.bpm ? Math.round(Number(c.bpm)) : null;
 const key = c.key || "";
 ```
 
-spotdl und streamrip schreiben beides praktisch nie. Damit laufen `compat.ts` (harmonische Kompatibilität), `autoset.ts` (Auto-Reihenfolge) und die halbe Timeline auf leeren Feldern — die Kernfunktionen der App sind auf genau dem Material blind, das der Downloader liefert. **Das ist der wichtigste Baustein, nicht die UI-Zusammenlegung.**
+Die Downloader schreiben beides praktisch nie. Damit laufen `compat.ts` (harmonische Kompatibilität), `autoset.ts` (Auto-Reihenfolge) und die halbe Timeline auf leeren Feldern — die Kernfunktionen der App sind auf genau dem Material blind, das der Downloader liefert. **Das ist der wichtigste Baustein, nicht die UI-Zusammenlegung.**
 
 ---
 
@@ -43,7 +43,7 @@ Ein Fenster, fünf Schritte, kein Werkzeugwechsel:
 
 ```
 Link einwerfen
-   │  spotdl / streamrip, Playlist-Name = Ordnername
+   │  spotdl / yt-dlp / streamrip, Playlist-Name = Ordnername
    ▼
 Downloads/<Playlist>/…            ── Ordner wird automatisch Musik-Quelle
    │  librosa + essentia: BPM, Key, Camelot
@@ -81,14 +81,14 @@ Re-Sync                           ── Traktor-Werte gewinnen
         │ spawn                 │ spawn
 ┌───────▼──────────┐   ┌────────▼─────────────────────┐
 │ import-music.mjs │   │ SpotifyDL — uv-Umgebung      │
-│ (Node)           │   │ spotdl · streamrip · analyze │
+│ (Node)           │   │ spotdl · yt-dlp · rip        │
 └──────────────────┘   └──────────────────────────────┘
 ```
 
 ### Warum so
 
 - **`server.mjs` bleibt das Backend.** Es kann bereits alles Nötige: Kindprozesse mit zeilenweisem NDJSON-Log (`:63`–`:105`), Dateisystem-Zugriff, Range-Streaming, Cover-Cache. Ein zweiter Server (Python) daneben würde zwei Ports, zwei Lebenszyklen und CORS bedeuten — für null Gewinn.
-- **SpotifyDL wird nicht portiert.** spotdl und streamrip sind Python, funktionieren, und werden gepflegt. Sie als Kindprozess zu starten ist exakt das Muster, das `server.mjs:76` schon für den Import nutzt.
+- **SpotifyDL wird nicht portiert.** spotdl, yt-dlp und streamrip sind Python, funktionieren, und werden gepflegt. Sie als Kindprozess zu starten ist exakt das Muster, das `server.mjs:76` schon für den Import nutzt.
 - **Die Analyse ist Python.** librosa und essentia haben in JavaScript kein Äquivalent, das für Key-Erkennung ernsthaft in Frage käme. Die uv-Umgebung ist bereits da.
 - **Kein Tauri in diesem Vorhaben.** Der Express-Server übernimmt vorerst die Dateisystem-Rolle, die das Pflichtenheft der Rust-Shell zugedacht hatte. Tauri bleibt als spätere Verpackung sinnvoll, blockiert aber nichts.
 
@@ -122,16 +122,16 @@ URLs, Ordnernamen und Dateipfade kommen aus Nutzereingaben. Sobald irgendwo `she
 
 | Route | Body / Query | Antwort |
 |---|---|---|
-| `POST /api/download` | `{ url, source, format, bitrate, targetDir? }` | NDJSON: `log` / `progress` / `done` |
-| `GET /api/jobs` | — | Laufender Job und Warteschlange |
-| `DELETE /api/jobs/:id` | — | Job abbrechen |
+| `POST /api/download` | `{ url, source, format, bitrate }` | NDJSON: `queued` / `start` / `log` / `done` *(gebaut)* |
+| `GET /api/jobs` | — | Laufender Auftrag und Warteschlange *(gebaut)* |
+| `DELETE /api/jobs/:id` | — | Auftrag abbrechen *(gebaut)* |
 | `POST /api/import` | zusätzlich `analyze: true` | wie bisher; fehlende BPM/Key werden gerechnet und als Schätzung markiert *(gebaut)* |
 | `POST /api/analyze` | `{ files[] }` oder `{ folder }` | NDJSON je Datei — eigenständiger Endpunkt für Nachanalyse ohne Neuimport *(offen)* |
-| `POST /api/traktor/dry-run` | `{ collectionPath, setId }` | Diff-Vorschau, schreibt nichts |
-| `POST /api/traktor/write` | `{ collectionPath, setId, confirm }` | `{backup, written, entries}` |
-| `GET /api/traktor/status` | — | Läuft Traktor? Datei gesperrt? |
+| `POST /api/traktor/dry-run` | `{ collectionPath, setId }` | Diff-Vorschau, schreibt nichts *(offen)* |
+| `POST /api/traktor/write` | `{ collectionPath, setId, confirm }` | `{backup, written, entries}` *(offen)* |
+| `GET /api/traktor/status` | — | Läuft Traktor? Datei gesperrt? *(offen)* |
 
-**NDJSON-Konvention:** eine JSON-Zeile pro Ereignis, `{type:"log", msg}` fürs Log-Fenster, `{type:"done", success, …}` als letzte Zeile. Die Client-Seite existiert bereits in `ImportButton.tsx` — beim Bau von AP-A als Hook `useNdjsonStream` herausziehen statt kopieren.
+**NDJSON-Konvention:** eine JSON-Zeile pro Ereignis, `{type:"log", msg}` fürs Log-Fenster, `{type:"done", success, …}` als letzte Zeile. Die Client-Seite liegt in `src/lib/ndjson.ts` (`streamNdjson`) und wird von Import und Download geteilt.
 
 ---
 
@@ -145,11 +145,15 @@ const folder = relDir ? `${rootName}/${relDir}` : rootName;
 
 Heißt der Download-Ordner wie die Playlist, ist das Gruppen-Label in der Bibliothek automatisch der Playlist-Name — ohne eine Zeile Zusatzlogik.
 
-- **spotdl:** Output-Template `{list-name}/{artist} - {title}.{output-ext}`
-- **streamrip:** Ordner-Templates in `H:\Projekte\SpotifyDL\config\streamrip.toml`
-- **Fallback:** liefert die Quelle keinen Listennamen (Einzeltrack, private Liste), Ordner aus Datum und Quelle bilden — nie flach nach `Downloads/` schütten.
+Die Kommandos stehen in `scripts/download.mjs`; Engines und Formatmatrix stammen aus `dashboard.py` (`build_command`) und wurden übernommen, nicht neu erfunden.
 
-Die Format- und Bitratenmatrix ist in `H:\Projekte\SpotifyDL\dashboard.py:96` (`build_command`) bereits ausformuliert und erprobt: übernehmen, nicht neu erfinden.
+- **spotdl** (Spotify): `Spotify/{list-name}/{artists} - {title}.{output-ext}` für Playlists und Alben, flach für Einzeltracks.
+- **yt-dlp** (SoundCloud): `%(playlist_title|Einzelne Tracks)s/%(uploader)s - %(title)s.%(ext)s`. Der Ersatzname greift, wenn die Quelle keinen Listennamen liefert — so landet nichts flach im Wurzelordner. Im Trockenlauf gegen eine echte Likes-Seite geprüft.
+- **streamrip** (Tidal/Qobuz/Deezer): Ordner-Templates aus der `streamrip.toml`, Pfad über `STREAMRIP_CONFIG`.
+
+AIFF können weder spotdl noch yt-dlp direkt; das Kommando fällt auf WAV zurück und meldet, dass die Umwandlung per ffmpeg noch aussteht.
+
+Die Werkzeuge werden im venv gesucht, das SpotifyDL beim ersten Start anlegt (`SPOTIFYDL_VENV`, sonst `~/.spotifydl/venv`), sonst auf dem `PATH`. Das Zielverzeichnis kommt aus `DOWNLOAD_PATH` — kein fester Pfad im Code.
 
 ---
 

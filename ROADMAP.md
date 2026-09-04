@@ -30,8 +30,8 @@ getrennte Programme. Sie wird in Re:SET zusammengeführt; SpotifyDL bleibt als
 Download- und Analyse-Motor erhalten und wird vom Server als Kindprozess gestartet.
 
 - [x] **AP-B Stufe 1 — Open Key** · Key-Tags in Open-Key-Notation (`1m`–`12d`) wurden von `toCamelot()` verworfen. Umrechnung aus 497 Referenzpaaren hergeleitet, 497/497 korrekt → 1155 Tracks zeigen ihren Key ohne Analyse.
-- [ ] **AP-B Stufe 2 — BPM/Key rechnen** · `scripts/analyze.py` (librosa, über `uv run --script`, PEP-723-Abhängigkeiten) · `import-music.mjs --analyze` · Blindtest-Messung über `scripts/eval-analysis.mjs`. Trefferquoten in [docs/UNIFIED-PIPELINE.md](docs/UNIFIED-PIPELINE.md) §6.0.
-- [ ] **AP-A — Download in der Oberfläche** — `/api/download`, Job-Queue, Tab „Laden"; der Playlist-Name wird Ordnername und damit Bibliotheks-Label
+- [x] **AP-B Stufe 2 — BPM/Key rechnen** · `scripts/analyze.py` (librosa, über `uv run --script`, PEP-723-Abhängigkeiten) · `import-music.mjs --analyze` · Blindtest-Messung über `scripts/eval-analysis.mjs`. Gemessen am Blindtest: BPM 55,2 % exakt / 79,3 % brauchbar, Key 55,2 % exakt — Details in [docs/UNIFIED-PIPELINE.md](docs/UNIFIED-PIPELINE.md) §6.2.
+- [x] **AP-A — Download in der Oberfläche** · Tab „Laden" mit URL-Feld, Quelle/Format/Qualität, Live-Log und Warteschlange · `/api/download` startet spotdl · yt-dlp · streamrip als Kindprozess · der Playlist-Name wird Ordnername und damit Bibliotheks-Label · der Zielordner trägt sich selbst als Musik-Quelle ein
 - [ ] **AP-C — Traktor-Roundtrip** — Cues/Beatgrid lesen, Write-Back mit Pflicht-Backup, Dry-Run und atomarem Schreiben
 - [ ] **AP-D — Sync-Engine** — Adapter-Interface + Traktor-Adapter, Konflikte anzeigen statt auflösen (Lexicon-Parität)
 - [ ] **AP-E — Eine Oberfläche** — Laden · Bibliothek · Planen · Sync · Health
@@ -43,5 +43,5 @@ Download- und Analyse-Motor erhalten und wird vom Server als Kindprozess gestart
 
 ## Bekannte Platzhalter
 - Energie/Phase sind manuell zu taggen (kein Auto-Vorschlag).
-- BPM/Key kommen nur, wenn sie in den Datei-Tags stehen (sonst leer — bei DnB/Jungle oft da, sonst über Traktor-Analyse). **Behebt AP-B.**
+- Geschätzte Tonarten treffen nur jeden zweiten Track. Als Vorsortierung brauchbar, fürs harmonische Mixen nicht — dafür bleibt Traktors eigene Analyse maßgeblich.
 - Der Traktor-Export schreibt NML-*Dateien* zum manuellen Import, nicht in eine bestehende `collection.nml`. **Behebt AP-C.**

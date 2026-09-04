@@ -19,7 +19,9 @@ import { HelpOverlay } from "./components/HelpOverlay";
 import { ImportButton } from "./components/ImportButton";
 import { UploadNmlButton } from "./components/UploadNmlButton";
 import { LibraryManager } from "./components/LibraryManager";
+import { DownloadPanel } from "./components/DownloadPanel";
 import {
+  CloudArrowDown,
   GridFour,
   WaveSine,
   Graph,
@@ -40,7 +42,7 @@ const MiniPlayer = lazy(() =>
 );
 
 type Filter = Phase | "all" | "untagged";
-type View = "library" | "timeline" | "canvas" | "health";
+type View = "download" | "library" | "timeline" | "canvas" | "health";
 type SortKey = "order" | "folder" | "title" | "artist" | "bpm" | "key" | "energy";
 
 function camelotVal(c: string | null): number {
@@ -291,6 +293,9 @@ export function App() {
           </span>
         </h1>
         <div className="flex items-center gap-0.5 rounded-md border border-line p-0.5">
+          <ViewTab active={view === "download"} onClick={() => setView("download")}>
+            <CloudArrowDown size={14} weight="regular" /> Laden
+          </ViewTab>
           <ViewTab active={view === "library"} onClick={() => setView("library")}>
             <GridFour size={14} weight="regular" /> Library
           </ViewTab>
@@ -355,7 +360,9 @@ export function App() {
         </div>
       )}
 
-      {view === "library" ? (
+      {view === "download" ? (
+        <DownloadPanel />
+      ) : view === "library" ? (
         <>
           <nav className="mt-6 flex flex-wrap items-center gap-2">
             <FilterChip active={filter === "all"} onClick={() => setFilter("all")}>

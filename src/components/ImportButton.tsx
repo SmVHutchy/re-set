@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Upload } from "@phosphor-icons/react";
 import { toast } from "../lib/toast";
+import { streamNdjson } from "../lib/ndjson";
 
 export function ImportButton() {
   const [loading, setLoading] = useState(false);
@@ -50,42 +51,20 @@ export function ImportButton() {
     setLoading(true);
     setLogLines([]);
     try {
-      const res = await fetch("/api/import", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ folder: folderToImport, deep: deepScan, analyze }),
-      });
-
-      // Fehler vor dem Stream (z.B. Ordner nicht gefunden) kommen als JSON.
-      if (!res.ok || !res.body) {
-        const err = await res.json().catch(() => ({ error: "Import fehlgeschlagen" }));
-        toast(err.error || "Import fehlgeschlagen");
+      const result = await streamNdjson(
+        "/api/import",
+        { folder: folderToImport, deep: deepScan, analyze },
+        (evt) => {
+          if (evt.type === "log") setLogLines((prev) => [...prev, String(evt.msg)]);
+        },
+      );
+      if (result.error) {
+        toast(result.error);
         setLoading(false);
         return;
       }
-
-      // NDJSON-Stream zeilenweise lesen und live ins Log schreiben.
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-      let ok = false;
-      for (;;) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() ?? "";
-        for (const line of lines) {
-          if (!line.trim()) continue;
-          const evt = JSON.parse(line);
-          if (evt.type === "log") {
-            setLogLines((prev) => [...prev, evt.msg]);
-          } else if (evt.type === "done") {
-            ok = evt.success;
-            if (!ok) toast(evt.error || "Import fehlgeschlagen");
-          }
-        }
-      }
+      const ok = result.ok;
+      if (!ok) toast(result.done?.error || "Import fehlgeschlagen");
 
       if (ok) {
         setLogLines((prev) => [...prev, "Fertig — lade neu …"]);

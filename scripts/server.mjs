@@ -8,6 +8,13 @@ import path from "node:path";
 import fs from "node:fs";
 import os from "node:os";
 import { parseFile } from "music-metadata";
+import {
+  BITRATES,
+  ENGINE_LABEL,
+  FORMATS,
+  buildCommand,
+  resolveEngine,
+} from "./download.mjs";
 
 const app = express();
 app.use(express.json());
@@ -104,6 +111,182 @@ app.post("/api/import", (req, res) => {
     if (!res.writableEnded && child.exitCode === null) child.kill();
   });
 });
+
+// ---- Downloads --------------------------------------------------------------
+// Bisher lief das Herunterladen in einem eigenen Python-Dashboard, das Planen
+// hier — zwei Fenster für einen Arbeitsgang. Der Server startet die Engines
+// jetzt selbst als Kindprozess, mit demselben NDJSON-Live-Log wie der Import.
+const DOWNLOAD_ROOT =
+  process.env.DOWNLOAD_PATH || path.join(os.homedir(), "Music", "Re-SET Downloads");
+
+// Genau ein Download gleichzeitig: parallele Läufe sättigen die Platte, und die
+// Engines schreiben ohnehin in dieselben Ordner. Wartende Aufträge halten ihre
+// Verbindung offen und bekommen ihre Position gemeldet.
+const queue = [];
+let active = null;
+let jobCounter = 0;
+
+function jobView(j) {
+  return {
+    id: j.id,
+    url: j.url,
+    engine: j.engine,
+    format: j.format,
+    state: j.state,
+    startedAt: j.startedAt ?? null,
+  };
+}
+
+app.get("/api/jobs", (_req, res) => {
+  res.json({ active: active ? jobView(active) : null, queued: queue.map(jobView) });
+});
+
+app.delete("/api/jobs/:id", (req, res) => {
+  const id = Number(req.params.id);
+  if (active?.id === id) {
+    active.cancelled = true;
+    active.child?.kill();
+    return res.json({ cancelled: "active" });
+  }
+  const i = queue.findIndex((j) => j.id === id);
+  if (i === -1) return res.status(404).json({ error: "Auftrag nicht gefunden" });
+  const [j] = queue.splice(i, 1);
+  j.send({ type: "done", success: false, error: "abgebrochen" });
+  j.res.end();
+  res.json({ cancelled: "queued" });
+});
+
+app.post("/api/download", (req, res) => {
+  const { url, source = "auto", format = "mp3", bitrate = "320k" } = req.body ?? {};
+  if (typeof url !== "string" || !/^https?:\/\//i.test(url.trim())) {
+    return res.status(400).json({ error: "Keine gültige URL" });
+  }
+  if (!FORMATS.includes(format) || !BITRATES.includes(bitrate)) {
+    return res.status(400).json({ error: "Format oder Qualität unbekannt" });
+  }
+  const engine = resolveEngine(url.trim(), source);
+  if (!engine) {
+    return res.status(400).json({ error: "Quelle nicht erkannt — Engine manuell wählen" });
+  }
+
+  res.setHeader("Content-Type", "application/x-ndjson; charset=utf-8");
+  res.setHeader("Cache-Control", "no-cache");
+
+  const job = {
+    id: ++jobCounter,
+    url: url.trim(),
+    engine,
+    format,
+    bitrate,
+    state: "queued",
+    res,
+    child: null,
+    cancelled: false,
+    send: (obj) => {
+      if (!res.writableEnded) res.write(JSON.stringify(obj) + "\n");
+    },
+  };
+
+  res.on("close", () => {
+    // Verbindung weg, bevor wir fertig sind → wartenden Auftrag verwerfen bzw.
+    // laufenden Prozess beenden. writableEnded-Guard, damit ein normal
+    // beendeter Request nichts killt.
+    if (res.writableEnded) return;
+    if (active === job) {
+      job.cancelled = true;
+      job.child?.kill();
+    } else {
+      const i = queue.indexOf(job);
+      if (i !== -1) queue.splice(i, 1);
+    }
+  });
+
+  queue.push(job);
+  if (active) job.send({ type: "queued", position: queue.length });
+  pump();
+});
+
+function pump() {
+  if (active || !queue.length) return;
+  active = queue.shift();
+  runJob(active);
+}
+
+function runJob(job) {
+  job.state = "running";
+  job.startedAt = Date.now();
+
+  const plan = buildCommand({
+    url: job.url,
+    engine: job.engine,
+    format: job.format,
+    bitrate: job.bitrate,
+    root: DOWNLOAD_ROOT,
+  });
+  if (!plan) {
+    job.send({ type: "done", success: false, error: "Engine nicht unterstützt" });
+    return finish(job);
+  }
+
+  fs.mkdirSync(plan.cwd, { recursive: true });
+  job.send({ type: "start", engine: ENGINE_LABEL[job.engine], target: plan.targetDir });
+
+  // spawn mit Argument-Array (kein Shell) → keine Injection über die URL, kein
+  // Pfad-Quoting. Dieselbe Form wie beim Import.
+  const child = spawn(plan.cmd, plan.args, { cwd: plan.cwd });
+  job.child = child;
+
+  let buf = "";
+  const onChunk = (chunk) => {
+    buf += chunk.toString();
+    // \r trennt auch: die Engines schreiben Fortschritt mit Wagenrücklauf.
+    const lines = buf.split(/\r?\n|\r/);
+    buf = lines.pop() ?? "";
+    for (const line of lines) if (line.trim()) job.send({ type: "log", msg: line });
+  };
+  child.stdout.on("data", onChunk);
+  child.stderr.on("data", onChunk);
+
+  child.on("error", (err) => {
+    job.send({ type: "done", success: false, error: `${plan.cmd}: ${err.message}` });
+    finish(job);
+  });
+
+  child.on("close", (code) => {
+    if (buf.trim()) job.send({ type: "log", msg: buf });
+    const ok = code === 0 && !job.cancelled;
+    if (ok) {
+      // Der Zielordner wird sofort Musik-Quelle — sonst müsste der Nutzer den
+      // Pfad, den wir gerade selbst gewählt haben, von Hand nachtragen.
+      if (!musicSources.includes(plan.targetDir)) {
+        musicSources.push(plan.targetDir);
+        saveSources();
+        rebuildIndex();
+      }
+      if (plan.convertTo) {
+        job.send({
+          type: "log",
+          msg: `Hinweis: ${plan.convertTo.toUpperCase()} muss noch per ffmpeg erzeugt werden.`,
+        });
+      }
+    }
+    job.send({
+      type: "done",
+      success: ok,
+      code,
+      cancelled: job.cancelled,
+      targetDir: plan.targetDir,
+    });
+    finish(job);
+  });
+}
+
+function finish(job) {
+  job.state = "done";
+  if (!job.res.writableEnded) job.res.end();
+  if (active === job) active = null;
+  pump();
+}
 
 // Dateinamen aus einem Anzeigenamen ableiten und Kollisionen vermeiden.
 function sanitizeCollectionName(n) {

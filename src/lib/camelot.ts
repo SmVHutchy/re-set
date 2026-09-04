@@ -19,12 +19,31 @@ const NAME_TO_CAMELOT: Record<string, string> = {
 
 const CAMELOT_RE = /^(1[0-2]|[1-9])[ABab]$/;
 
+// Open Key (1m–12m Moll, 1d–12d Dur) — die Schreibweise, in der die Key-Tags
+// unserer Download-Sammlung durchgängig stehen. Ohne diese Umrechnung wird ein
+// vorhandener Key als „fehlt" angezeigt.
+//
+// Camelot und Open Key zählen dasselbe Rad mit unterschiedlichem Nullpunkt: die
+// Camelot-Zahl liegt sieben Positionen weiter (1m = 8A, 6m = 1A, 12d = 7B).
+// Empirisch bestätigt an 497 Tracks, bei denen Traktors MUSICAL_KEY und der
+// Open-Key-Tag beide vorlagen — keine einzige mehrdeutige Zuordnung.
+const OPEN_KEY_RE = /^(0?[1-9]|1[0-2])\s*([dm])$/i;
+
+function openKeyToCamelot(k: string): string | null {
+  const m = OPEN_KEY_RE.exec(k);
+  if (!m) return null;
+  const num = ((parseInt(m[1], 10) + 6) % 12) + 1;
+  return `${num}${m[2].toLowerCase() === "m" ? "A" : "B"}`;
+}
+
 /** Liefert einen Camelot-Code aus rohem Key-Text bzw. dem Traktor-Integer. */
 export function toCamelot(rawKey: string | null, traktorValue: number | null): string | null {
   if (rawKey) {
     const k = rawKey.trim();
     if (CAMELOT_RE.test(k)) return k.toUpperCase();
     if (NAME_TO_CAMELOT[k]) return NAME_TO_CAMELOT[k];
+    const open = openKeyToCamelot(k);
+    if (open) return open;
   }
   if (traktorValue != null && TRAKTOR_KEY_TO_CAMELOT[traktorValue]) {
     return TRAKTOR_KEY_TO_CAMELOT[traktorValue];

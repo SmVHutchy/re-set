@@ -63,7 +63,7 @@ Empfohlene Reihenfolge: **B → A → C → D → E.** B zuerst, weil ohne BPM u
 
 > **Auftrag:** 76,3 % der Download-Sammlung tragen weder BPM- noch Key-Tag (gemessen, siehe `UNIFIED-PIPELINE.md` §6.0), und `import-music.mjs:113` liest beides nur aus Tags. Damit laufen `compat.ts`, `autoset.ts` und die Energie-Timeline auf dem Großteil der Bibliothek leer. Schließe diese Lücke — in zwei Stufen, die billige zuerst.
 >
-> **Stufe 1 — Open Key parsen (kein librosa nötig):** Die vorhandenen Key-Tags stehen durchgängig in Open-Key-Notation (`1m`–`12m` = Moll, `1d`–`12d` = Dur). `toCamelot()` in `src/lib/camelot.ts` erkennt sie nicht und verwirft sie, obwohl der Wert in der Datei steht — betrifft rund ein Viertel der Sammlung. Open Key nach Camelot ist eine reine Umbenennung: dieselbe Zahl, `m` → `A`, `d` → `B`. Ergänzen, testen, fertig. **Diese Stufe zuerst, sie kostet Minuten und schließt ein Viertel der Lücke.**
+> **Stufe 1 — Open Key parsen (kein librosa nötig): erledigt.** Die vorhandenen Key-Tags standen durchgängig in Open-Key-Notation (`1m`–`12m` Moll, `1d`–`12d` Dur), und `toCamelot()` verwarf sie. Umrechnung: die Camelot-Zahl liegt **sieben Positionen weiter** (`1m` = 8A, `6m` = 1A, `12d` = 7B) — *nicht* dieselbe Zahl, wie man vermuten könnte. Empirisch an 497 Paaren aus Open-Key-Tag und Traktors `MUSICAL_KEY` hergeleitet, 0 mehrdeutige Zuordnungen, 497/497 korrekt.
 >
 > **Stufe 2 — Analyse bauen:**
 > - `scripts/analyze.py`, ausgeführt in der uv-Umgebung von SpotifyDL (`H:\Projekte\SpotifyDL\bin\uv.exe run python …`). Eingabe: Dateipfade als Argumente oder über stdin. Ausgabe: **eine JSON-Zeile pro Datei** auf stdout, damit der Server sie wie jeden anderen Kindprozess-Log zeilenweise streamen kann:

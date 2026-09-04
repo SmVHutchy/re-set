@@ -206,7 +206,7 @@ Wirkung in Zahlen: **1155 Tracks** (24,4 % der Sammlung) zeigen ab sofort ihren 
 - **BPM** — librosa, Median über drei Fenster à 45 s, verteilt über die mittleren 75 % des Tracks (Intro und Outro tragen oft kein stabiles Tempo). Danach Faltung ins Fenster 70–195 BPM gegen Halb- und Doppeltempo.
 - **Key** — Chroma-CQT, gemittelt über dieselben Fenster, korreliert mit den 24 Rotationen eines Tonart-Profils. Camelot wird direkt mitgeliefert, damit `toCamelot()` den Wert ohne Umweg erkennt.
 - **Ehrlichkeit über die Herkunft.** Geschätzte Werte werden als geschätzt markiert: `INFO ESTIMATED="bpm key"` in der NML, `bpmEstimated`/`keyEstimated` am `Track`, ein „geschätzt" im Inspector. `BPM_QUALITY` ist für Schätzungen bei 80 gedeckelt — 100 bleibt dem vorbehalten, was aus einem Tag oder aus Traktor stammt. Beim Re-Sync gewinnt Traktor immer.
-- **Kosten.** Rund 3–4 s pro Track. Ein Cache über `Pfad|mtime|size` (Muster: `coverCache`, `server.mjs:348`) fehlt noch — bei 3583 Tracks sind das etwa vier Stunden, die man nicht zweimal laufen lassen will.
+- **Kosten.** Rund 3–4 s pro Track — bei 3583 Tracks etwa vier Stunden, die man kein zweites Mal laufen lassen will. Ein Cache über `Pfad|mtime|Größe|Dauer` (Muster: `coverCache`, `server.mjs:348`) liegt in `.analysis-cache.local.json`; ein Re-Import derselben Dateien kostet danach Sekunden statt Stunden. Ändert sich die Datei, ändert sich der Schlüssel und die Analyse läuft neu.
 
 ### 6.2 Gemessen: was die Analyse trifft
 

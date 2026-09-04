@@ -2,7 +2,7 @@
 // zieht die eingebetteten Cover nach public/covers/. Read-only auf der Quelle.
 // Nutzung:  node scripts/import-music.mjs "/Pfad/zum/Musik-Ordner"
 import { parseFile } from "music-metadata";
-import { readdir, mkdir, writeFile, copyFile } from "node:fs/promises";
+import { readdir, mkdir, writeFile, readFile, copyFile, stat } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { spawn, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -14,6 +14,37 @@ const SCRIPTS_DIR = dirname(fileURLToPath(import.meta.url));
 // Obergrenze für BPM_QUALITY bei selbst gerechneten Werten. 100 bleibt dem
 // vorbehalten, was aus einem Tag oder aus Traktor kommt.
 const ESTIMATED_QUALITY_CAP = 80;
+
+// Analyse-Cache: rechner-spezifische Pfade, gehört nicht in die Versionierung
+// (.gitignore deckt *.local.* ab).
+const ANALYSIS_CACHE_FILE = resolve(SCRIPTS_DIR, "..", ".analysis-cache.local.json");
+
+/**
+ * Cache-Schlüssel aus Pfad, Änderungszeit und Größe — dasselbe Muster wie der
+ * Cover-Cache im Server. Ändert sich die Datei, ändert sich der Schlüssel und
+ * die Analyse läuft neu.
+ */
+async function cacheKey(full, entry) {
+  const s = await stat(full);
+  return `${full}|${Math.round(s.mtimeMs)}|${s.size}|${entry.dur ?? ""}`;
+}
+
+async function loadAnalysisCache() {
+  try {
+    const raw = JSON.parse(await readFile(ANALYSIS_CACHE_FILE, "utf-8"));
+    return new Map(Object.entries(raw));
+  } catch {
+    return new Map(); // keine Datei / kaputt → leerer Cache, kein Grund abzubrechen
+  }
+}
+
+async function saveAnalysisCache(cache) {
+  try {
+    await writeFile(ANALYSIS_CACHE_FILE, JSON.stringify(Object.fromEntries(cache), null, 2));
+  } catch (err) {
+    log(`Analyse-Cache nicht geschrieben: ${err.message}`);
+  }
+}
 
 const args = process.argv.slice(2);
 let deep = args.includes("--deep");
@@ -270,9 +301,31 @@ if (analyze) {
   if (!need.length) {
     log("Analyse: alle Tracks haben bereits BPM und Key.");
   } else {
-    log(`Analyse: ${need.length} Track${need.length === 1 ? "" : "s"} ohne BPM/Key …`);
+    const cache = await loadAnalysisCache();
     const byFile = new Map(need.map((e) => [e.full, e]));
-    const results = await runAnalyzer([...byFile.keys()]);
+
+    // Schon Gerechnetes nicht noch einmal rechnen: bei ~3,5 s pro Track
+    // kostet ein voller Durchlauf über die Sammlung Stunden, und ein
+    // Re-Import ändert an der Musik nichts.
+    const fresh = [];
+    const results = [];
+    for (const [full, e] of byFile) {
+      const hit = cache.get(await cacheKey(full, e));
+      if (hit) results.push({ ...hit, file: full });
+      else fresh.push(full);
+    }
+    if (results.length) log(`Analyse: ${results.length} aus dem Cache.`);
+    if (fresh.length) {
+      log(`Analyse: ${fresh.length} Track${fresh.length === 1 ? "" : "s"} ohne BPM/Key …`);
+      const computed = await runAnalyzer(fresh);
+      results.push(...computed);
+      for (const r of computed) {
+        if (r.error) continue;
+        const e = byFile.get(r.file);
+        if (e) cache.set(await cacheKey(r.file, e), r);
+      }
+      await saveAnalysisCache(cache);
+    }
 
     for (const r of results) {
       const e = byFile.get(r.file);

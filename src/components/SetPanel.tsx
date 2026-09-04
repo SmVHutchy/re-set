@@ -9,8 +9,9 @@ import {
   COMPAT_DASH,
 } from "../lib/compat";
 import { PHASE_COLOR } from "../lib/tags";
-import { useState } from "react";
-import { tracklistText, m3u } from "../lib/export";
+import { useState, type DragEvent } from "react";
+import { tracklistText, m3u, m3uPerPhase, nmlPlaylists, nmlSinglePlaylist } from "../lib/export";
+import { autoSet } from "../lib/autoset";
 import { toast } from "../lib/toast";
 import {
   CaretUp,
@@ -23,6 +24,7 @@ import {
   DotsSixVertical,
   DownloadSimple,
   ClipboardText,
+  Sparkle,
 } from "@phosphor-icons/react";
 
 interface Props {
@@ -48,6 +50,20 @@ export function SetPanel({ state, trackById, onSelect }: Props) {
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   const [overIdx, setOverIdx] = useState<number | null>(null);
   const [copied, setCopied] = useState(false);
+  // Highlight, während eine Library-Kachel über dem Panel schwebt.
+  const [dropActive, setDropActive] = useState(false);
+
+  const DRAG_TYPE = "application/x-reset-track";
+
+  // Eine aus der Library gezogene Kachel ins aktive Set aufnehmen.
+  const onExternalDrop = (e: DragEvent) => {
+    const id = e.dataTransfer.getData(DRAG_TYPE);
+    setDropActive(false);
+    if (!id) return; // interner Reorder-Drop → hier nichts tun
+    e.preventDefault();
+    dispatch({ type: "addToSet", trackId: id });
+    toast("Ins Set");
+  };
 
   const onDrop = (to: number) => {
     if (dragIdx !== null && dragIdx !== to) dispatch({ type: "reorderInSet", from: dragIdx, to });
@@ -66,19 +82,85 @@ export function SetPanel({ state, trackById, onSelect }: Props) {
     }
   };
 
-  const downloadM3u = () => {
-    const blob = new Blob([m3u(items)], { type: "audio/x-mpegurl" });
+  const safeName = (s: string) => (s || "set").replace(/[^\w\-]+/g, "_");
+
+  const downloadFile = (content: string, name: string, mime = "audio/x-mpegurl") => {
+    const blob = new Blob([content], { type: mime });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `${set.name || "set"}.m3u`;
+    a.download = name;
     a.click();
     URL.revokeObjectURL(url);
-    toast(".m3u exportiert");
+  };
+
+  // Ein M3U, geordnet pre → mid → peak → late (der Set-Bogen als eine Playlist).
+  const downloadM3u = () => {
+    downloadFile(m3u(items, state), `${safeName(set.name)}.m3u`);
+    toast(".m3u exportiert (nach Phase geordnet)");
+  };
+
+  // Ein M3U pro Phase → in Traktor getrennte, farb-sortierte Playlists.
+  const downloadPerPhase = () => {
+    const files = m3uPerPhase(items, state);
+    if (!files.length) return;
+    files.forEach((f, i) =>
+      // leicht versetzt auslösen, damit der Browser die Mehrfach-Downloads zulässt
+      setTimeout(() => downloadFile(f.content, `${safeName(set.name)} – ${f.label}.m3u`), i * 150),
+    );
+    toast(`${files.length} Phasen-Playlists exportiert`);
+  };
+
+  // Traktor-NML, EINE Playlist (pre→late geordnet) — funktioniert mit dem
+  // normalen Rechtsklick → „Playlist importieren".
+  const downloadNml = () => {
+    const { content, skipped, tracks } = nmlSinglePlaylist(items, state, set.name);
+    downloadFile(content, `${safeName(set.name)}.nml`, "application/xml");
+    toast(
+      `${tracks} Tracks als eine Playlist exportiert` +
+        (skipped > 0 ? ` (${skipped} ohne Pfad übersprungen)` : "") +
+        " — Traktor: Rechtsklick → Playlist importieren",
+    );
+  };
+
+  // Traktor-NML, Ordner mit einer Playlist je Phase — braucht in Traktor
+  // zwingend Rechtsklick → „Playlist-ORDNER importieren" (der einfache
+  // Playlist-Import nimmt nur eine einzelne Playlist aus der Datei).
+  const downloadNmlFolder = () => {
+    const { content, skipped, playlists } = nmlPlaylists(items, state, set.name);
+    downloadFile(content, `${safeName(set.name)} Phasen.nml`, "application/xml");
+    toast(
+      `${playlists} Phasen-Playlists exportiert` +
+        (skipped > 0 ? ` (${skipped} ohne Pfad übersprungen)` : "") +
+        " — Traktor: Rechtsklick → Playlist-ORDNER importieren!",
+    );
+  };
+
+  // Lokaler Auto-Modus: Phasen + Reihenfolge aus Harmonik/BPM/Genre/Energie.
+  const runAutoSet = () => {
+    const { order, phases } = autoSet(items, state);
+    dispatch({ type: "applyAutoSet", order, phases });
+    toast("Auto-Set: Phasen + Reihenfolge gesetzt (Strg+Z = rückgängig)");
   };
 
   return (
-    <section className="rounded-lg border border-line bg-surface p-4">
+    <section
+      className="rounded-lg border bg-surface p-4 transition-colors"
+      style={{ borderColor: dropActive ? "var(--color-accent)" : "var(--color-line)" }}
+      // Externe Library-Kachel: nur reagieren, wenn wirklich ein Track gezogen
+      // wird (interner Reorder setzt diesen Typ nicht → stört das Panel nicht).
+      onDragOver={(e) => {
+        if (!e.dataTransfer.types.includes(DRAG_TYPE)) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "copy";
+        if (!dropActive) setDropActive(true);
+      }}
+      onDragLeave={(e) => {
+        if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+        setDropActive(false);
+      }}
+      onDrop={onExternalDrop}
+    >
       <div className="flex items-center gap-2">
         <Stack size={16} weight="regular" className="text-ink-soft" />
         <input
@@ -118,7 +200,7 @@ export function SetPanel({ state, trackById, onSelect }: Props) {
 
       {items.length === 0 ? (
         <p className="mt-6 mb-2 text-center text-[13px] text-ink-soft">
-          Noch leer. Tracks über{" "}
+          Noch leer. Kacheln hierher ziehen oder über{" "}
           <span className="inline-flex h-4 w-4 translate-y-[3px] items-center justify-center rounded border border-line">
             <Plus size={10} weight="bold" />
           </span>{" "}
@@ -161,10 +243,12 @@ export function SetPanel({ state, trackById, onSelect }: Props) {
                   draggable
                   onDragStart={() => setDragIdx(i)}
                   onDragOver={(e) => {
+                    if (dragIdx === null) return; // externer Drag → Section übernimmt
                     e.preventDefault();
                     if (overIdx !== i) setOverIdx(i);
                   }}
                   onDrop={(e) => {
+                    if (dragIdx === null) return; // externen Drop die Section erledigen lassen
                     e.preventDefault();
                     onDrop(i);
                   }}
@@ -226,7 +310,7 @@ export function SetPanel({ state, trackById, onSelect }: Props) {
       )}
 
       {items.length > 0 && (
-        <div className="mt-3 flex gap-2 border-t border-line pt-3">
+        <div className="mt-3 flex flex-wrap gap-2 border-t border-line pt-3">
           <button
             onClick={copyList}
             className="flex items-center gap-1.5 rounded-md border border-line px-2 py-1 text-[12px] text-ink-soft transition-colors hover:text-ink active:translate-y-[1px]"
@@ -235,10 +319,41 @@ export function SetPanel({ state, trackById, onSelect }: Props) {
           </button>
           <button
             onClick={downloadM3u}
+            title="Ein .m3u, geordnet pre → mid → peak → late"
             className="flex items-center gap-1.5 rounded-md border border-line px-2 py-1 text-[12px] text-ink-soft transition-colors hover:text-ink active:translate-y-[1px]"
           >
             <DownloadSimple size={13} weight="regular" /> .m3u
           </button>
+          <button
+            onClick={downloadPerPhase}
+            title="Ein .m3u pro Phase → getrennte Playlists in Traktor"
+            className="flex items-center gap-1.5 rounded-md border border-line px-2 py-1 text-[12px] text-ink-soft transition-colors hover:text-ink active:translate-y-[1px]"
+          >
+            <DownloadSimple size={13} weight="regular" /> pro Phase
+          </button>
+          <button
+            onClick={downloadNml}
+            title="Eine Traktor-Playlist, pre → late geordnet — in Traktor: Rechtsklick → Playlist importieren"
+            className="flex items-center gap-1.5 rounded-md border border-line px-2 py-1 text-[12px] text-ink-soft transition-colors hover:text-ink active:translate-y-[1px]"
+          >
+            <DownloadSimple size={13} weight="regular" /> .nml
+          </button>
+          <button
+            onClick={downloadNmlFolder}
+            title="Ordner mit Playlists je Phase (Name pre/mid/peak/late) — in Traktor: Rechtsklick → Playlist-ORDNER importieren"
+            className="flex items-center gap-1.5 rounded-md border border-line px-2 py-1 text-[12px] text-ink-soft transition-colors hover:text-ink active:translate-y-[1px]"
+          >
+            <DownloadSimple size={13} weight="regular" /> .nml Phasen
+          </button>
+          {items.length >= 2 && (
+            <button
+              onClick={runAutoSet}
+              title="Auto-Modus: Phasen + Reihenfolge automatisch aus Harmonik, BPM, Genre und Energie"
+              className="flex items-center gap-1.5 rounded-md border border-line px-2 py-1 text-[12px] font-medium text-sig transition-colors hover:text-ink active:translate-y-[1px]"
+            >
+              <Sparkle size={13} weight="fill" /> Auto
+            </button>
+          )}
         </div>
       )}
     </section>

@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useReducer } from "react";
+import { createContext, useContext, useEffect, useReducer, useRef } from "react";
 import type { Phase } from "../tags";
 import type { DJSet, PersistState, TrackTags, SmartCrate } from "./types";
 import { EMPTY_TAGS } from "./types";
@@ -25,6 +25,7 @@ type Action =
   | { type: "batchAddVibe"; ids: string[]; vibe: string }
   | { type: "batchAddToSet"; ids: string[] }
   | { type: "replaceSetOrder"; ids: string[] }
+  | { type: "applyAutoSet"; order: string[]; phases: Record<string, Phase> }
   | { type: "addSmartCrate"; crate: SmartCrate }
   | { type: "deleteSmartCrate"; id: string }
   | { type: "undo" }
@@ -158,6 +159,19 @@ function reducer(state: PersistState, action: Action): PersistState {
         const valid = action.ids.filter((id) => s.trackIds.includes(id));
         return valid.length === s.trackIds.length ? { ...s, trackIds: valid } : s;
       });
+    // Auto-Modus: Phasen-Tags UND Set-Reihenfolge in einem Schritt, damit ein
+    // einziges Undo den kompletten Vorschlag rückgängig macht.
+    case "applyAutoSet": {
+      const tags = { ...state.tags };
+      for (const [id, phase] of Object.entries(action.phases)) {
+        tags[id] = { ...(tags[id] ?? EMPTY_TAGS), phase };
+      }
+      return withActiveSet({ ...state, tags }, (s) => {
+        const valid = action.order.filter((id) => s.trackIds.includes(id));
+        const missing = s.trackIds.filter((id) => !valid.includes(id));
+        return { ...s, trackIds: [...valid, ...missing] };
+      });
+    }
     case "addSmartCrate":
       return { ...state, smartCrates: [...state.smartCrates, action.crate] };
     case "deleteSmartCrate":
@@ -207,9 +221,26 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     future: [],
   }));
 
+  // Persistenz entprellt: schnelle Tag-Edits (Energie-Ziehen, Batch, Tippen)
+  // serialisieren den State sonst bei jedem Dispatch synchron auf dem
+  // Main-Thread. Der Timer wird bei jedem Dispatch nur neu gesetzt (echtes
+  // Debounce); geflusht wird ausschließlich beim Unmount/Tab-Wechsel, damit
+  // nichts verloren geht.
+  const present = history.present;
+  const latest = useRef(present);
+  latest.current = present;
   useEffect(() => {
-    saveState(history.present);
-  }, [history.present]);
+    const t = setTimeout(() => saveState(latest.current), 500);
+    return () => clearTimeout(t);
+  }, [present]);
+  useEffect(() => {
+    const flush = () => saveState(latest.current);
+    window.addEventListener("pagehide", flush);
+    return () => {
+      window.removeEventListener("pagehide", flush);
+      flush();
+    };
+  }, []);
 
   return (
     <StoreCtx.Provider

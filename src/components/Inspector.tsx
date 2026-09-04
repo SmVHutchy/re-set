@@ -42,6 +42,22 @@ export function Inspector({ track, tags, inSet, onPreview }: Props) {
         <div className="mt-1 flex items-center gap-2 font-mono text-[11px] text-ink-faint">
           {track.keyCamelot && <span className="text-accent">{track.keyCamelot}</span>}
           {track.bpm != null && <span>{track.bpm.toFixed(1)} BPM</span>}
+          {/* Geschätzt heißt: von uns gerechnet, nicht aus Traktor. Wer danach
+              mixt, soll den Unterschied sehen. */}
+          {(track.keyEstimated || track.bpmEstimated) && (
+            <span
+              className="text-ink-faint"
+              title={
+                track.keyEstimated && track.bpmEstimated
+                  ? "BPM und Tonart selbst analysiert, nicht aus Traktor"
+                  : track.keyEstimated
+                    ? "Tonart selbst analysiert, nicht aus Traktor"
+                    : "BPM selbst analysiert, nicht aus Traktor"
+              }
+            >
+              geschätzt
+            </span>
+          )}
           {track.genre && <span className="truncate">· {track.genre}</span>}
         </div>
         {(track.bitrate != null || track.lossless || track.lufs != null) && (

@@ -8,6 +8,7 @@ export function ImportButton() {
   const [folders, setFolders] = useState<Array<{ name: string; path: string }>>([]);
   const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
   const [deepScan, setDeepScan] = useState(false);
+  const [analyze, setAnalyze] = useState(false);
   const [customPath, setCustomPath] = useState("");
   const [useCustom, setUseCustom] = useState(false);
   const [logLines, setLogLines] = useState<string[]>([]);
@@ -52,7 +53,7 @@ export function ImportButton() {
       const res = await fetch("/api/import", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ folder: folderToImport, deep: deepScan }),
+        body: JSON.stringify({ folder: folderToImport, deep: deepScan, analyze }),
       });
 
       // Fehler vor dem Stream (z.B. Ordner nicht gefunden) kommen als JSON.
@@ -162,7 +163,7 @@ export function ImportButton() {
               </div>
             </div>
 
-            <label className="mb-5 flex items-center gap-2 cursor-pointer">
+            <label className="mb-2 flex items-center gap-2 cursor-pointer">
               <input
                 type="checkbox"
                 checked={deepScan}
@@ -171,6 +172,19 @@ export function ImportButton() {
               />
               <span className="text-xs text-ink-soft">Tiefe Qualitäts-Analyse</span>
               <span className="text-[10px] text-ink-faint">(langsamer)</span>
+            </label>
+
+            {/* Downloads von Spotify/SoundCloud tragen BPM und Tonart fast nie.
+                Ohne sie laufen Kompatibilität und Auto-Set leer. */}
+            <label className="mb-5 flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={analyze}
+                onChange={(e) => setAnalyze(e.target.checked)}
+                className="w-4 h-4 rounded border border-line cursor-pointer"
+              />
+              <span className="text-xs text-ink-soft">BPM &amp; Tonart schätzen, wo sie fehlen</span>
+              <span className="text-[10px] text-ink-faint">(deutlich langsamer)</span>
             </label>
 
             {logLines.length > 0 && (

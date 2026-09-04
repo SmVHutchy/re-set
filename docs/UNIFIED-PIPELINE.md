@@ -125,7 +125,8 @@ URLs, Ordnernamen und Dateipfade kommen aus Nutzereingaben. Sobald irgendwo `she
 | `POST /api/download` | `{ url, source, format, bitrate, targetDir? }` | NDJSON: `log` / `progress` / `done` |
 | `GET /api/jobs` | — | Laufender Job und Warteschlange |
 | `DELETE /api/jobs/:id` | — | Job abbrechen |
-| `POST /api/analyze` | `{ files[] }` oder `{ folder }` | NDJSON je Datei: `{file, bpm, key, camelot, confidence}` |
+| `POST /api/import` | zusätzlich `analyze: true` | wie bisher; fehlende BPM/Key werden gerechnet und als Schätzung markiert *(gebaut)* |
+| `POST /api/analyze` | `{ files[] }` oder `{ folder }` | NDJSON je Datei — eigenständiger Endpunkt für Nachanalyse ohne Neuimport *(offen)* |
 | `POST /api/traktor/dry-run` | `{ collectionPath, setId }` | Diff-Vorschau, schreibt nichts |
 | `POST /api/traktor/write` | `{ collectionPath, setId, confirm }` | `{backup, written, entries}` |
 | `GET /api/traktor/status` | — | Läuft Traktor? Datei gesperrt? |
@@ -195,16 +196,50 @@ Wirkung in Zahlen: **1155 Tracks** (24,4 % der Sammlung) zeigen ab sofort ihren 
 
 ### 6.1 Der Analysator
 
-`scripts/analyze.py` läuft in der uv-Umgebung von SpotifyDL und gibt JSON-Zeilen aus:
+`scripts/analyze.py` wird über `uv run --script` gestartet. Die Abhängigkeiten stehen als PEP-723-Block im Kopf der Datei, uv löst sie in einer eigenen Umgebung auf — SpotifyDLs Python bleibt unangetastet. Ausgabe ist eine JSON-Zeile je Datei:
 
 ```json
-{"file":"…/track.mp3","bpm":174.0,"bpm_confidence":0.94,"key":"F#m","camelot":"11A","key_confidence":0.71}
+{"file":"…/track.mp3","bpm":174.28,"bpm_raw":174.28,"bpm_confidence":1.0,
+ "key":"F#m","camelot":"11A","key_confidence":0.71,"duration":310.34}
 ```
 
-- **BPM** — librosa `beat.beat_track`. Der klassische Fehler ist das Halb- oder Doppeltempo (87 statt 174). Gegen ein plausibles Fenster prüfen und korrigieren; das Fenster darf konfigurierbar sein, denn DnB bei 170–180 verhält sich anders als House bei 120–130.
-- **Key** — Chroma plus Krumhansl-Schmuckler, oder essentia `KeyExtractor` wenn verfügbar. Die Camelot-Umrechnung existiert bereits in `src/lib/camelot.ts`; diese Zuordnung spiegeln, nicht zweimal definieren.
-- **Ehrlichkeit über die Herkunft.** Geschätzte Werte werden als geschätzt markiert (eigenes NML-Attribut, analog zu `LUFS`/`HFMAX` aus dem Deep-Scan). Health und Inspector müssen „geschätzt" von „aus Traktor" unterscheiden können, und beim Re-Sync gewinnt Traktor immer. Key-Erkennung liegt realistisch bei 70–85 Prozent — als sicher dargestellt wäre sie schlimmer als gar keine.
-- **Kosten.** Analyse ist teuer. Cache über `Pfad|mtime|size` (Muster: `coverCache`, `server.mjs:348`), Fortschritt über den bestehenden Live-Log.
+- **BPM** — librosa, Median über drei Fenster à 45 s, verteilt über die mittleren 75 % des Tracks (Intro und Outro tragen oft kein stabiles Tempo). Danach Faltung ins Fenster 70–195 BPM gegen Halb- und Doppeltempo.
+- **Key** — Chroma-CQT, gemittelt über dieselben Fenster, korreliert mit den 24 Rotationen eines Tonart-Profils. Camelot wird direkt mitgeliefert, damit `toCamelot()` den Wert ohne Umweg erkennt.
+- **Ehrlichkeit über die Herkunft.** Geschätzte Werte werden als geschätzt markiert: `INFO ESTIMATED="bpm key"` in der NML, `bpmEstimated`/`keyEstimated` am `Track`, ein „geschätzt" im Inspector. `BPM_QUALITY` ist für Schätzungen bei 80 gedeckelt — 100 bleibt dem vorbehalten, was aus einem Tag oder aus Traktor stammt. Beim Re-Sync gewinnt Traktor immer.
+- **Kosten.** Rund 3–4 s pro Track. Ein Cache über `Pfad|mtime|size` (Muster: `coverCache`, `server.mjs:348`) fehlt noch — bei 3583 Tracks sind das etwa vier Stunden, die man nicht zweimal laufen lassen will.
+
+### 6.2 Gemessen: was die Analyse trifft
+
+Blindtest, 29 tagfreie Kopien über 12 BPM-Bänder (71–190 BPM), Erwartung aus Traktors eigener Analyse. Reproduzierbar mit:
+
+```bash
+node scripts/eval-analysis.mjs <testordner>
+```
+
+| Konfiguration | BPM exakt | BPM brauchbar¹ | Key exakt |
+|---|---|---|---|
+| librosa-Standardprior (120 ± 1) | 44,8 % | 62,1 % | — |
+| **Prior 140 ± 8 · Krumhansl-Schmuckler · CQT** ← Standard | **55,2 %** | **79,3 %** | **55,2 %** |
+| Prior 150 ± 20 | 55,2 % | 79,3 % | — |
+| Key-Profil Shaath | | | 44,8 % |
+| Key-Profil Temperley | | | 41,4 % |
+| Shaath + Perkussion entfernt | | | 44,8 % |
+| Shaath + CENS-Chroma | | | 48,3 % |
+| Shaath + Perkussion entfernt + CENS | | | 51,7 % |
+| Krumhansl-Schmuckler + CENS-Chroma | | | 51,7 % |
+| Krumhansl-Schmuckler + 5 Fenster à 60 s | 51,7 % | 79,3 % | 48,3 % |
+
+¹ exakt oder Oktavfehler (halbes/doppeltes Tempo) — im DJ-Kontext meist noch brauchbar, weil das Raster stimmt.
+
+Drei Ergebnisse, die gegen die Erwartung liefen und ohne Messung falsch entschieden worden wären:
+
+1. **Der librosa-Standardprior ist das größte Einzelproblem.** `start_bpm=120, std_bpm=1` zieht schnelle Musik systematisch nach unten — ein 174-BPM-Track landet bei 117, weil das näher an 120 liegt. Ein breiter Prior kostet nichts und bringt zehn Punkte.
+2. **Shaath verliert gegen Krumhansl-Schmuckler**, obwohl es ausdrücklich für elektronische Musik nachjustiert wurde und in KeyFinder steckt — hier zehn Punkte schlechter.
+3. **Perkussion herauszurechnen bringt exakt null.** Die naheliegendste Verbesserung bei Musik mit lauten Drums, teuer in der Rechenzeit, ohne jede Wirkung. Mehr und längere Fenster machen es sogar schlechter.
+
+**Einordnung.** BPM ist brauchbar: vier von fünf Tracks bekommen ein korrektes Raster, und der häufigste Fehler ist die Oktave, die beim Mixen nicht stört. Der Key trifft nur jeden zweiten Track — als Vorsortierung taugt das, als Grundlage fürs harmonische Mixen nicht. Wer es genau braucht, lässt Traktor analysieren; die Schätzung ist der Zwischenstand, bis das passiert ist. Genau dafür ist sie als Schätzung markiert.
+
+`bpm_confidence` misst die Einigkeit der Analysefenster, **nicht** die Richtigkeit: ein Oktavfehler ist über den ganzen Track stabil und bekommt daher Konfidenz 1,0. Der Wert taugt zum Aussortieren unruhiger Tracks, nicht als Qualitätsaussage.
 
 ---
 

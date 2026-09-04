@@ -61,7 +61,7 @@ app.get("/api/music-folders", (_req, res) => {
 // Import läuft als Kindprozess; jede Ausgabezeile wird sofort als NDJSON
 // gestreamt, damit die UI live mitliest, was gerade analysiert wird.
 app.post("/api/import", (req, res) => {
-  const { folder, deep } = req.body ?? {};
+  const { folder, deep, analyze } = req.body ?? {};
   if (!folder || typeof folder !== "string" || !fs.existsSync(folder)) {
     return res.status(400).json({ error: "Ordner nicht gefunden" });
   }
@@ -73,6 +73,7 @@ app.post("/api/import", (req, res) => {
   // spawn mit Argument-Array (kein Shell) → keine Injection, kein Pfad-Quoting.
   const args = [IMPORT_SCRIPT, folder];
   if (deep) args.push("--deep");
+  if (analyze) args.push("--analyze");
   const child = spawn(process.execPath, args, { cwd: ROOT });
 
   // stdout + stderr zeilenweise puffern und als Log-Events senden.

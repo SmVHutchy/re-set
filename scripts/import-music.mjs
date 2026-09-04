@@ -4,22 +4,90 @@
 import { parseFile } from "music-metadata";
 import { readdir, mkdir, writeFile, copyFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { join, extname, basename, dirname, resolve, relative } from "node:path";
 
 const AUDIO = new Set([".mp3", ".aiff", ".aif", ".flac", ".wav", ".m4a", ".ogg"]);
+const SCRIPTS_DIR = dirname(fileURLToPath(import.meta.url));
+
+// Obergrenze für BPM_QUALITY bei selbst gerechneten Werten. 100 bleibt dem
+// vorbehalten, was aus einem Tag oder aus Traktor kommt.
+const ESTIMATED_QUALITY_CAP = 80;
 
 const args = process.argv.slice(2);
 let deep = args.includes("--deep");
+let analyze = args.includes("--analyze");
 const inputDir = args.find((a) => !a.startsWith("--"));
 if (!inputDir) {
-  console.error('Usage: node scripts/import-music.mjs "<music-folder>" [--deep]');
+  console.error('Usage: node scripts/import-music.mjs "<music-folder>" [--deep] [--analyze]');
   process.exit(1);
 }
 
 if (deep && spawnSync("ffmpeg", ["-version"]).status !== 0) {
   console.warn("ffmpeg nicht gefunden — Deep-Scan (LUFS/Peak/Cutoff) übersprungen.");
   deep = false;
+}
+
+// uv startet analyze.py mit isoliert aufgelösten Abhängigkeiten (PEP 723),
+// ohne eine vorhandene Python-Umgebung anzufassen.
+if (analyze && spawnSync("uv", ["--version"]).status !== 0) {
+  console.warn("uv nicht gefunden — BPM/Key-Analyse übersprungen.");
+  analyze = false;
+}
+
+/**
+ * Schickt alle Pfade an einen einzigen analyze.py-Prozess (der librosa-Import
+ * allein kostet Sekunden, pro Datei wäre das unbezahlbar) und liest die
+ * JSON-Zeilen zurück. Fortschritt kommt über stderr und wandert direkt ins
+ * Live-Log. Ein Fehlschlag liefert eine leere Liste statt zu werfen — der
+ * Import soll auch ohne Analyse durchlaufen.
+ */
+function runAnalyzer(paths) {
+  return new Promise((done) => {
+    const child = spawn("uv", ["run", "--script", join(SCRIPTS_DIR, "analyze.py"), "--stdin"], {
+      cwd: resolve(SCRIPTS_DIR, ".."),
+    });
+    const out = [];
+    let buf = "";
+    let errBuf = "";
+
+    child.stdout.on("data", (chunk) => {
+      buf += chunk.toString();
+      const lines = buf.split("\n");
+      buf = lines.pop() ?? "";
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        try {
+          out.push(JSON.parse(line));
+        } catch {
+          log(`  Analyse: unlesbare Zeile übersprungen`);
+        }
+      }
+    });
+    child.stderr.on("data", (chunk) => {
+      errBuf += chunk.toString();
+      const lines = errBuf.split("\n");
+      errBuf = lines.pop() ?? "";
+      for (const line of lines) if (line.trim()) log(`  ${line.trim()}`);
+    });
+    child.on("error", (err) => {
+      log(`Analyse nicht gestartet: ${err.message}`);
+      done([]);
+    });
+    child.on("close", () => {
+      if (buf.trim()) {
+        try {
+          out.push(JSON.parse(buf));
+        } catch {
+          // unvollständige letzte Zeile → ignorieren
+        }
+      }
+      done(out);
+    });
+
+    child.stdin.end(paths.join("\n") + "\n");
+  });
 }
 
 // ebur128 (Lautheit + True-Peak) + Hochpass>16k + volumedetect (HF-Energie für Transcode-Verdacht).
@@ -152,35 +220,31 @@ for (const [idx, f] of files.entries()) {
     if (bpm) withBpm++;
     if (key) withKey++;
 
-    const albumNode = album ? `\n    <ALBUM TITLE="${esc(album)}"></ALBUM>` : "";
-    const infoAttrs = [
-      genre && `GENRE="${esc(genre)}"`,
-      key && `KEY="${esc(key)}"`,
-      dur && `PLAYTIME="${dur}"`,
-      bitrate && `BITRATE="${bitrate}"`,
-      sampleRate && `SAMPLERATE="${sampleRate}"`,
-      `LOSSLESS="${lossless}"`,
+    // Erst sammeln, XML später: die Analyse braucht alle Kandidaten auf
+    // einmal (ein Python-Prozess statt einer je Datei), und ihre Ergebnisse
+    // müssen vor dem Schreiben in den Datensatz zurückfließen.
+    entries.push({
+      full,
+      title,
+      artist,
+      album,
+      genre,
+      key,
+      bpm,
+      keyEstimated: false,
+      bpmEstimated: false,
+      bpmQuality: bpm ? 100 : null,
+      dur,
+      bitrate,
+      sampleRate,
+      lossless,
       deepAttrs,
-    ]
-      .filter(Boolean)
-      .join(" ");
-    const infoNode = `\n    <INFO ${infoAttrs}></INFO>`;
-    const tempoNode = bpm
-      ? `\n    <TEMPO BPM="${bpm}.000000" BPM_QUALITY="100.000000"></TEMPO>`
-      : "";
-
-    // FOLDER ist unsere eigene Erweiterung (wie COVERART/AUDIO) und trägt das
-    // Gruppen-Label für die Library-Ansicht.
-    // FOLDER ist unsere eigene Erweiterung (wie COVERART/AUDIO) und trägt das
-    // Gruppen-Label für die Library-Ansicht.
-    entries.push(
-      `  <ENTRY TITLE="${esc(title)}" ARTIST="${esc(artist)}"${coverAttr}${audioAttr} FOLDER="${esc(folder)}">` +
-        `\n    <LOCATION DIR="${esc(fileDir)}/" FILE="${esc(fileName)}" VOLUME=""></LOCATION>` +
-        albumNode +
-        infoNode +
-        tempoNode +
-        `\n  </ENTRY>`,
-    );
+      coverAttr,
+      audioAttr,
+      folder,
+      fileDir,
+      fileName,
+    });
 
     // Kompakte Ergebniszeile pro Track fürs Live-Log.
     const facts = [
@@ -195,13 +259,91 @@ for (const [idx, f] of files.entries()) {
   }
 }
 
+// --- Analyse für Tracks ohne BPM/Key ---------------------------------------
+// Downloads von Spotify/SoundCloud tragen die Felder fast nie. Ohne sie
+// laufen Kompatibilität, Auto-Set und Timeline leer, deshalb rechnen wir sie
+// auf Wunsch selbst aus. Ergebnisse werden als Schätzung markiert — Traktors
+// eigene Werte haben immer Vorrang.
+let analyzed = 0;
+if (analyze) {
+  const need = entries.filter((e) => !e.bpm || !e.key);
+  if (!need.length) {
+    log("Analyse: alle Tracks haben bereits BPM und Key.");
+  } else {
+    log(`Analyse: ${need.length} Track${need.length === 1 ? "" : "s"} ohne BPM/Key …`);
+    const byFile = new Map(need.map((e) => [e.full, e]));
+    const results = await runAnalyzer([...byFile.keys()]);
+
+    for (const r of results) {
+      const e = byFile.get(r.file);
+      if (!e || r.error) {
+        if (r.error) log(`  ${basename(r.file)} — Analyse fehlgeschlagen: ${r.error}`);
+        continue;
+      }
+      if (!e.bpm && r.bpm) {
+        e.bpm = r.bpm;
+        e.bpmEstimated = true;
+        // BPM_QUALITY ist Traktors Verlässlichkeitsfeld; 100 steht dort für
+        // "gemessen und sicher". Ein geschätzter Wert darf das nie behaupten,
+        // auch wenn die Analyse-Fenster sich einig waren — Einigkeit ist nicht
+        // Richtigkeit: ein Oktavfehler ist über den ganzen Track stabil.
+        // Deshalb gedeckelt, damit Geschätztes auch numerisch unter Gemessenem
+        // bleibt.
+        e.bpmQuality = Math.round((r.bpm_confidence ?? 0) * ESTIMATED_QUALITY_CAP);
+        withBpm++;
+      }
+      if (!e.key && r.camelot) {
+        // Camelot-Code direkt: toCamelot() erkennt ihn ohne Umweg.
+        e.key = r.camelot;
+        e.keyEstimated = true;
+        withKey++;
+      }
+      analyzed++;
+    }
+    log(`Analyse: ${analyzed}/${need.length} Tracks ergänzt.`);
+  }
+}
+
+function entryXml(e) {
+  const albumNode = e.album ? `\n    <ALBUM TITLE="${esc(e.album)}"></ALBUM>` : "";
+  // ESTIMATED ist unsere eigene Erweiterung (wie COVERART/AUDIO/FOLDER) und
+  // sagt, welche Felder gerechnet statt gelesen sind.
+  const estimated = [e.bpmEstimated && "bpm", e.keyEstimated && "key"].filter(Boolean).join(" ");
+  const infoAttrs = [
+    e.genre && `GENRE="${esc(e.genre)}"`,
+    e.key && `KEY="${esc(e.key)}"`,
+    e.dur && `PLAYTIME="${e.dur}"`,
+    e.bitrate && `BITRATE="${e.bitrate}"`,
+    e.sampleRate && `SAMPLERATE="${e.sampleRate}"`,
+    `LOSSLESS="${e.lossless}"`,
+    estimated && `ESTIMATED="${estimated}"`,
+    e.deepAttrs,
+  ]
+    .filter(Boolean)
+    .join(" ");
+  const tempoNode = e.bpm
+    ? `\n    <TEMPO BPM="${Number(e.bpm).toFixed(6)}" BPM_QUALITY="${Number(e.bpmQuality ?? 0).toFixed(6)}"></TEMPO>`
+    : "";
+
+  // FOLDER ist unsere eigene Erweiterung (wie COVERART/AUDIO) und trägt das
+  // Gruppen-Label für die Library-Ansicht.
+  return (
+    `  <ENTRY TITLE="${esc(e.title)}" ARTIST="${esc(e.artist)}"${e.coverAttr}${e.audioAttr} FOLDER="${esc(e.folder)}">` +
+    `\n    <LOCATION DIR="${esc(e.fileDir)}/" FILE="${esc(e.fileName)}" VOLUME=""></LOCATION>` +
+    albumNode +
+    `\n    <INFO ${infoAttrs}></INFO>` +
+    tempoNode +
+    `\n  </ENTRY>`
+  );
+}
+
 const xml =
   `<?xml version="1.0" encoding="UTF-8" standalone="no" ?>\n` +
   `<NML VERSION="19">\n` +
   `<HEAD COMPANY="www.native-instruments.com" PROGRAM="Traktor"></HEAD>\n` +
   `<MUSICFOLDERS></MUSICFOLDERS>\n` +
   `<COLLECTION ENTRIES="${entries.length}">\n` +
-  entries.join("\n") +
+  entries.map(entryXml).join("\n") +
   `\n</COLLECTION>\n</NML>\n`;
 
 await writeFile(join(publicDir, "collection.local.nml"), xml);
@@ -209,3 +351,4 @@ await writeFile(join(publicDir, "collection.local.nml"), xml);
 console.log(`Importiert: ${entries.length} Tracks → public/collection.local.nml`);
 console.log(`Cover: ${withCover}/${entries.length} · BPM: ${withBpm} · Key: ${withKey}`);
 if (deep) console.log(`Deep-Scan (LUFS/Peak/HF): ${deepOk}/${entries.length}`);
+if (analyze) console.log(`Analysiert (geschätzte Werte): ${analyzed}`);

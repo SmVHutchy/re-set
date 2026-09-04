@@ -29,7 +29,8 @@ Die Kette Link → Download → Analyse → Set → Traktor läuft heute über z
 getrennte Programme. Sie wird in Re:SET zusammengeführt; SpotifyDL bleibt als
 Download- und Analyse-Motor erhalten und wird vom Server als Kindprozess gestartet.
 
-- [ ] **AP-B — Analyse: BPM & Key** *(höchste Priorität)* — `analyze.py` (librosa/essentia) füllt die Felder, die spotdl/streamrip nie liefern. Ohne sie laufen Kompatibilität, Auto-Set und Timeline leer.
+- [x] **AP-B Stufe 1 — Open Key** · Key-Tags in Open-Key-Notation (`1m`–`12d`) wurden von `toCamelot()` verworfen. Umrechnung aus 497 Referenzpaaren hergeleitet, 497/497 korrekt → 1155 Tracks zeigen ihren Key ohne Analyse.
+- [ ] **AP-B Stufe 2 — BPM/Key rechnen** · `scripts/analyze.py` (librosa, über `uv run --script`, PEP-723-Abhängigkeiten) · `import-music.mjs --analyze` · Blindtest-Messung über `scripts/eval-analysis.mjs`. Trefferquoten in [docs/UNIFIED-PIPELINE.md](docs/UNIFIED-PIPELINE.md) §6.0.
 - [ ] **AP-A — Download in der Oberfläche** — `/api/download`, Job-Queue, Tab „Laden"; der Playlist-Name wird Ordnername und damit Bibliotheks-Label
 - [ ] **AP-C — Traktor-Roundtrip** — Cues/Beatgrid lesen, Write-Back mit Pflicht-Backup, Dry-Run und atomarem Schreiben
 - [ ] **AP-D — Sync-Engine** — Adapter-Interface + Traktor-Adapter, Konflikte anzeigen statt auflösen (Lexicon-Parität)

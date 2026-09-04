@@ -10,6 +10,11 @@ export interface Track {
   keyCamelot: string | null;
   keyRaw: string | null;
   keyValue: number | null; // Traktors MUSICAL_KEY VALUE (0–23) — für den Re-Export
+  // Aus unserer eigenen Analyse gerechnet statt aus einem Tag gelesen. Das
+  // muss sichtbar bleiben: eine geschätzte Tonart trifft nicht immer, und wer
+  // nach ihr mixt, sollte das wissen. Traktor-Werte gewinnen beim Re-Sync.
+  bpmEstimated: boolean;
+  keyEstimated: boolean;
   path: string | null;
   // Rohe LOCATION-Attribute (Traktors /:-Format) — für den NML-Export, damit
   // die PRIMARYKEYs exakt den Pfaden in der Traktor-Collection entsprechen.
@@ -151,6 +156,8 @@ export function parseNml(xml: string): Track[] {
 
     const keyRaw = info?.getAttribute("KEY") ?? null;
     const keyValue = num(key?.getAttribute("VALUE") ?? null);
+    // ESTIMATED="bpm key" setzt unser Importer für selbst gerechnete Werte.
+    const estimated = (info?.getAttribute("ESTIMATED") ?? "").split(/\s+/);
 
     // Ohne Titel und Pfad ist ein Eintrag nicht sinnvoll referenzierbar.
     if (!title && !path) continue;
@@ -165,6 +172,8 @@ export function parseNml(xml: string): Track[] {
       keyCamelot: toCamelot(keyRaw, keyValue),
       keyRaw,
       keyValue,
+      bpmEstimated: estimated.includes("bpm"),
+      keyEstimated: estimated.includes("key"),
       path,
       loc: loc
         ? {

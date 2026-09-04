@@ -49,12 +49,13 @@ Ein Tool, das **auf der bestehenden Traktor-Library aufsetzt** und die Vorbereit
 - Kompatibilitäts-Engine (Camelot + BPM + Energie).
 - Set-Bau & **Write-Back** als Traktor-Playlist + `.m3u`-Export.
 - Backup-/Restore-Mechanik für `collection.nml`.
+- **Download** von Spotify/SoundCloud/Tidal/Qobuz/Deezer aus derselben Oberfläche; der Playlist-Name wird zum Ordner- und Bibliotheks-Label. *(Nachtrag 2026-09-04, siehe [docs/UNIFIED-PIPELINE.md](docs/UNIFIED-PIPELINE.md))*
+- **Eigene Audio-Analyse (BPM/Key)** für Material ohne Tags — verschoben aus §2.2, weil Downloads aus Spotify/SoundCloud praktisch nie BPM- oder Key-Tags tragen und die Kompatibilitäts-Engine damit auf genau diesem Material wirkungslos wäre. Geschätzte Werte werden als solche markiert; Traktor-Werte haben beim Re-Sync Vorrang.
 
 ### 2.2 Out of Scope (v1, ggf. später)
 - Echtes Abspielen/Mixen (bleibt in Traktor).
 - Echtzeit-Stems-Trennung.
-- Eigene Audio-Analyse (Key/BPM) — zunächst Traktor-Werte nutzen.
-- Support für Serato/rekordbox/Engine DJ (Architektur offen halten, aber nicht bauen).
+- Support für Serato/rekordbox/Engine DJ — das Sync-Adapter-Interface wird v1 so geschnitten, dass es sie trägt, gebaut wird nur der Traktor-Adapter.
 - Cloud-Sync/Mobile.
 
 ### 2.3 Annahmen

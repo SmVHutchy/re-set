@@ -19,11 +19,28 @@ Detaillierte Historie: `git log --oneline`.
 - [x] **UX-Runde** · Feedback-Toasts · Tastatur-Shortcuts + ?-Hilfe-Overlay · persistenter Mini-Player (Vorhören beim Blättern) · Onboarding-Banner + Hover-/View-Politur
 - [x] **Audioqualität** · Importer-Tiefenscan (ffmpeg: LUFS/True-Peak/HF-Cutoff) · Quality-Badges auf Covern · Inspector-Quality-Zeile · Health-„Qualität" (Low-Bitrate/Clipping/Transcode-Verdacht/Lautheits-Ausreißer)
 
-## Als Nächstes (Vorschläge)
+- [x] **Server-Runde** · Express-Backend (`scripts/server.mjs`): Musik-Quellen mit Dateinamen-Index, Audio-Streaming mit Range-Support, Cover on demand aus ID3, mehrere Bibliotheks-Ordner statt einer Datei
+- [x] **Traktor-Export** · NML-Playlist bzw. Playlist-Ordner je Phase (`nmlSinglePlaylist` / `nmlPlaylists`) · `.m3u` pro Phase · lokaler Auto-Modus (`autoset.ts`)
+
+## Als Nächstes — Eine Oberfläche
+Vollständiger Plan: [docs/UNIFIED-PIPELINE.md](docs/UNIFIED-PIPELINE.md) · Aufträge: [docs/HYPERPROMPT.md](docs/HYPERPROMPT.md)
+
+Die Kette Link → Download → Analyse → Set → Traktor läuft heute über zwei
+getrennte Programme. Sie wird in Re:SET zusammengeführt; SpotifyDL bleibt als
+Download- und Analyse-Motor erhalten und wird vom Server als Kindprozess gestartet.
+
+- [ ] **AP-B — Analyse: BPM & Key** *(höchste Priorität)* — `analyze.py` (librosa/essentia) füllt die Felder, die spotdl/streamrip nie liefern. Ohne sie laufen Kompatibilität, Auto-Set und Timeline leer.
+- [ ] **AP-A — Download in der Oberfläche** — `/api/download`, Job-Queue, Tab „Laden"; der Playlist-Name wird Ordnername und damit Bibliotheks-Label
+- [ ] **AP-C — Traktor-Roundtrip** — Cues/Beatgrid lesen, Write-Back mit Pflicht-Backup, Dry-Run und atomarem Schreiben
+- [ ] **AP-D — Sync-Engine** — Adapter-Interface + Traktor-Adapter, Konflikte anzeigen statt auflösen (Lexicon-Parität)
+- [ ] **AP-E — Eine Oberfläche** — Laden · Bibliothek · Planen · Sync · Health
+
+## Später
 - [ ] **Cover-Wall-Virtualisierung** — flüssig bis 5.000+ Tracks
-- [ ] **Re-Sync** mit Traktor (geänderte/neue/entfernte Tracks)
-- [ ] **AP3 — Write-Back nach Traktor** — braucht Rust/Tauri-Shell (Backup, Dry-Run)
+- [ ] **Weitere Sync-Ziele** — Rekordbox (XML), Serato (GEOB-ID3), Engine DJ (SQLite)
+- [ ] **Tauri-Shell** — Verpackung als Desktop-App; die Dateisystem-Rolle übernimmt vorerst der Express-Server
 
 ## Bekannte Platzhalter
 - Energie/Phase sind manuell zu taggen (kein Auto-Vorschlag).
-- BPM/Key kommen nur, wenn sie in den Datei-Tags stehen (sonst leer — bei DnB/Jungle oft da, sonst über Traktor-Analyse).
+- BPM/Key kommen nur, wenn sie in den Datei-Tags stehen (sonst leer — bei DnB/Jungle oft da, sonst über Traktor-Analyse). **Behebt AP-B.**
+- Der Traktor-Export schreibt NML-*Dateien* zum manuellen Import, nicht in eine bestehende `collection.nml`. **Behebt AP-C.**

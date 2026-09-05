@@ -249,20 +249,37 @@ Drei Ergebnisse, die gegen die Erwartung liefen und ohne Messung falsch entschie
 
 ## 7. Traktor-Formatwissen
 
-`nml.ts` liest heute `ENTRY`, `LOCATION`, `INFO`, `TEMPO`, `MUSICAL_KEY`, `ALBUM`. Für den Roundtrip fehlen Cues, Beatgrid und Nutzungsdaten.
+`nml.ts` liest `ENTRY`, `LOCATION`, `INFO`, `TEMPO`, `MUSICAL_KEY`, `ALBUM` — und seit AP-D auch `CUE_V2` und `PLAYCOUNT`.
 
-> **Wichtig:** Das NML-Format ist von Native Instruments nicht dokumentiert. Die folgende Tabelle ist **Arbeitshypothese, nicht Referenz.** Jede Zeile wird durch ein Diff-Experiment bestätigt oder korrigiert, bevor Code darauf baut — und die Tabelle wird mit dem Ergebnis aktualisiert.
+> Das NML-Format ist von Native Instruments nicht dokumentiert. Die Tabelle unten ist **nicht geraten**, sondern aus einer echten Collection ausgezählt: 588 Tracks mit Cues, 679 Cues insgesamt. Was systematisch zusammen auftritt, ist die Bedeutung. Nicht belegte Zeilen sind als solche markiert und dürfen nicht in Code einfließen.
 
-| Element | Vermutete Bedeutung | Status |
+### Belegt (Auszählung, 2026-09-05)
+
+| Element | Bedeutung | Beleg |
 |---|---|---|
-| `CUE_V2 @START` | Position in Millisekunden (Fließkomma) | zu bestätigen |
-| `CUE_V2 @TYPE` | Cue-Art (Hotcue / Fade / Load / Grid / Loop); Zahlencodes unbekannt | **zu ermitteln** |
-| `CUE_V2 @NAME` | Anzeigename des Hotcues | zu bestätigen |
-| `CUE_V2 @HOTCUE` | Slot-Nummer, `-1` für keinen Slot | zu bestätigen |
-| `CUE_V2 @LEN` | Loop-Länge in ms, `0` bei Punkt-Cues | zu bestätigen |
-| Grid-Anker | Ein einzelner Cue markiert den Beat-1-Anker, das Raster ergibt sich aus Anker plus `TEMPO@BPM` | zu bestätigen |
-| `INFO @RANKING` | Bewertung, Traktor-eigene Skala (nicht 1–5) | Skala zu ermitteln |
-| `INFO @PLAYCOUNT` | Abspielzähler | zu bestätigen |
+| `CUE_V2 @START` | Position in **Millisekunden**, Fließkomma | 679/679 Cues liegen als ms innerhalb der Trackdauer; als Sekunden gelesen nur 456 (67 %) |
+| `CUE_V2 @TYPE="4"` | **Grid-Anker** | 597 Stück, Name stets „AutoGrid" oder „Beat Marker", nie ein Slot, nie eine Länge; 586 der 597 liegen in den ersten vier Beats |
+| `CUE_V2 @TYPE="0"` | **Hotcue** (Punkt) | 79 Stück, davon 100 % mit Slot und 0 % mit Länge |
+| `CUE_V2 @TYPE="5"` | **Loop** | 3 Stück, 100 % mit Slot **und** Länge |
+| `CUE_V2 @HOTCUE` | Slot 0–7, `-1` heißt „kein Slot" | beobachtete Werte: −1 (597×) und 0–7 |
+| `CUE_V2 @LEN` | Loop-Länge in ms, `0` bei Punkt-Cues | nur bei TYPE=5 grösser als 0 |
+| Vorhandene Attribute | `NAME`, `DISPL_ORDER`, `TYPE`, `START`, `LEN`, `REPEATS`, `HOTCUE` | vollständige Auszählung über alle `CUE_V2` |
+
+### Der Fund, der das Interface gerettet hat
+
+**Ein Track kann mehrere Grid-Anker haben.** 586 der 588 Tracks tragen genau einen — aber einer hat fünf und einer sechs (manuell korrigierte Raster). Die naheliegende Modellierung „Traktor: ein Anker, Rekordbox: mehrere Punkte" ist damit falsch, und ein `gridAnchorMs: number` im Adapter hätte bei genau diesen Tracks Daten verschluckt. `TrackState.gridAnchorsMs` ist deshalb eine Liste.
+
+### Nicht belegt — offen
+
+| Element | Stand |
+|---|---|
+| `CUE_V2 @TYPE` 1, 2, 3 | in den Daten **nicht vorgekommen**. Traktors Oberfläche kennt Fade-In, Fade-Out und Load — welche Zahl welche ist, bleibt offen |
+| `CUE_V2 @REPEATS` | vorhanden, Bedeutung ungeklärt |
+| `CUE_V2 @DISPL_ORDER` | vorhanden, vermutlich Anzeigereihenfolge — ungeprüft |
+| `INFO @RANKING` | nur **ein** Wert in der ganzen Collection (25, bei 16 Tracks). Mit einem Datenpunkt ist keine Skala bestimmbar |
+| `INFO @PLAYCOUNT` | Werte 1 und 2 — plausibel ein Zähler, aber die Spanne ist zu klein für eine Aussage |
+
+Diese Zeilen schließt das Diff-Experiment, sobald du in Traktor einen Fade-Cue setzt und einen Track bewertest.
 
 ### Die Methode: Diff-Experiment
 
@@ -292,10 +309,14 @@ interface SyncAdapter {
 }
 ```
 
-- **`capabilities` ist Pflicht.** Traktor hat einen Beatgrid-Anker, Rekordbox mehrere Punkte, Serato speichert in ID3-`GEOB`-Blobs. Ein Interface, das nur Traktors Modell abbildet, muss für den zweiten Adapter aufgebrochen werden — also jetzt so schneiden, dass beides passt.
-- **Sync-State pro Track und Ziel** (`state.ts`): der letzte bekannte Stand. Nur so ist unterscheidbar, ob ein Feld sich geändert hat oder auf der einen Seite nie existierte.
-- **Konflikte werden angezeigt, nicht aufgelöst.** Leitprinzip 4 im Pflichtenheft: Vorschlag, kein Autopilot.
+- **`capabilities` ist Pflicht.** Serato speichert in ID3-`GEOB`-Blobs, Engine DJ in SQLite, jedes Ziel kann andere Felder. Ein Interface, das nur Traktors Modell abbildet, muss für den zweiten Adapter aufgebrochen werden. Der Traktor-Adapter meldet acht Felder und lässt `comment` bewusst weg: dort schreibt Re:SET beim Export selbst (Phase · Energie · Vibes), ein Abgleich würde die eigenen Notizen gegen sich selbst ausspielen.
+- **Sync-State pro Track und Ziel** (`state.ts`): der letzte bekannte Stand, in `localStorage` unter `reset.sync.snapshot.<adapter>`. Nur so ist unterscheidbar, ob ein Feld sich geändert hat oder auf der einen Seite nie existierte.
+- **Vergleich mit Toleranz.** Cue-Positionen werden auf 10 ms gerundet verglichen. Traktor schreibt Fließkommawerte; ein Unterschied in der zwölften Nachkommastelle ist keine Änderung, die jemanden interessiert, und 10 ms liegen weit unter allem Hörbaren. Ohne diese Rundung meldet jeder Abgleich Hunderte Fehlalarme.
+- **Konflikte werden angezeigt, nicht aufgelöst.** `findConflicts()` ist ein Drei-Wege-Vergleich: ein Konflikt entsteht nur, wenn dasselbe Feld sich seit dem gemeinsamen Stand auf beiden Seiten **unterschiedlich** geändert hat. Gleiche Änderung auf beiden Seiten ist keiner. Leitprinzip 4 im Pflichtenheft: Vorschlag, kein Autopilot.
+- **`apply()` wirft, solange AP-C fehlt.** Der Write-Back in eine bestehende `collection.nml` ist nicht gebaut; der Adapter sagt das mit einer verständlichen Meldung, statt still nichts zu tun. Ein Sync, der lautlos nichts schreibt, ist schlimmer als einer, der fehlt.
 - **v1 ist nur `traktor.ts`.** Rekordbox (XML, gut dokumentiert) ist der natürliche zweite Adapter — der klassische Traktor-zu-CDJ-Fall.
+
+**Geprüft** (17 konstruierte Fälle, `scratchpad/sync-test.mjs`): BPM-Änderung, Hotcue hinzugefügt, Hotcue um 500 ms verschoben, Grid-Anker dazugekommen, Playlist dazugekommen — alle erkannt. Umsortierte Cues, umsortierte Playlists und 2 ms Fließkomma-Rauschen — kein Fehlalarm. Konflikt nur bei beidseitig unterschiedlicher Änderung.
 
 ### Schreib-Sicherheit (nicht verhandelbar)
 

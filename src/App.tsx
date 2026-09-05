@@ -20,7 +20,9 @@ import { ImportButton } from "./components/ImportButton";
 import { UploadNmlButton } from "./components/UploadNmlButton";
 import { LibraryManager } from "./components/LibraryManager";
 import { DownloadPanel } from "./components/DownloadPanel";
+import { SyncView } from "./components/SyncView";
 import {
+  ArrowsClockwise,
   CloudArrowDown,
   GridFour,
   WaveSine,
@@ -42,7 +44,7 @@ const MiniPlayer = lazy(() =>
 );
 
 type Filter = Phase | "all" | "untagged";
-type View = "download" | "library" | "timeline" | "canvas" | "health";
+type View = "download" | "library" | "timeline" | "canvas" | "sync" | "health";
 type SortKey = "order" | "folder" | "title" | "artist" | "bpm" | "key" | "energy";
 
 function camelotVal(c: string | null): number {
@@ -305,6 +307,9 @@ export function App() {
           <ViewTab active={view === "canvas"} onClick={() => setView("canvas")}>
             <Graph size={14} weight="regular" /> Canvas
           </ViewTab>
+          <ViewTab active={view === "sync"} onClick={() => setView("sync")}>
+            <ArrowsClockwise size={14} weight="regular" /> Sync
+          </ViewTab>
           <ViewTab active={view === "health"} onClick={() => setView("health")}>
             <Heartbeat size={14} weight="regular" /> Health
           </ViewTab>
@@ -504,6 +509,8 @@ export function App() {
             />
           </div>
         </div>
+      ) : view === "sync" ? (
+        <SyncView tracks={tracks} />
       ) : (
         <HealthView
           tracks={tracks}

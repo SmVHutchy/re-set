@@ -4,7 +4,7 @@ import { streamNdjson } from "../lib/ndjson";
 import type { Track } from "../lib/nml";
 import { PHASE_COLOR, PHASE_LABEL } from "../lib/tags";
 import { activeSet, getTags, useStore } from "../lib/store/StoreProvider";
-import { nmlPlaylists, nmlSinglePlaylist, m3u } from "../lib/export";
+import { nmlPlaylists, nmlSinglePlaylist, m3u, type ExportOptions } from "../lib/export";
 import { toast } from "../lib/toast";
 
 /**
@@ -78,13 +78,17 @@ export function HandoffView({ tracks }: { tracks: Track[] }) {
   const [log, setLog] = useState<string[]>([]);
   const [laeuft, setLaeuft] = useState(false);
   const logRef = useRef<HTMLDivElement>(null);
+  // Grid mitschreiben spart Traktors Analysezeit; Sperren garantiert, dass es
+  // dabei bleibt — kostet aber die Möglichkeit, in Traktor einfach neu zu
+  // analysieren. Deshalb getrennt und beides sichtbar.
+  const [opt, setOpt] = useState<ExportOptions>({ grid: true, sperren: false });
 
   const items = useMemo(() => {
     const byId = new Map(tracks.map((t) => [t.id, t]));
     return set.trackIds.map((id) => byId.get(id)).filter((t): t is Track => !!t);
   }, [tracks, set.trackIds]);
 
-  const counts = useMemo(() => {
+  const counts = useMemo<Record<Readiness, number>>(() => {
     const c: Record<Readiness, number> = { bestaetigt: 0, geschaetzt: 0, offen: 0 };
     for (const t of items) c[readiness(t)]++;
     return c;
@@ -236,11 +240,53 @@ export function HandoffView({ tracks }: { tracks: Track[] }) {
       <section className="flex flex-col gap-3 rounded-lg border border-line bg-surface p-5">
         <h3 className="text-[12px] font-medium text-ink">Übergabe</h3>
 
+        <div className="flex flex-col gap-1.5 rounded-md border border-line bg-base p-2.5">
+          <label className="flex cursor-pointer items-start gap-2 text-[11px] text-ink-soft">
+            <input
+              type="checkbox"
+              checked={opt.grid}
+              onChange={(e) => setOpt((o) => ({ ...o, grid: e.target.checked }))}
+              className="mt-0.5 h-3.5 w-3.5 rounded border border-line"
+            />
+            <span>
+              Beatgrid mitschreiben
+              <span className="ml-1 font-mono text-ink-faint">
+                ({counts.bestaetigt} von {items.length})
+              </span>
+              <br />
+              <span className="text-ink-faint">
+                Nur bestätigte Werte. Traktor rechnet diese Tracks nicht neu.
+              </span>
+            </span>
+          </label>
+          <label
+            className={`flex items-start gap-2 text-[11px] ${
+              opt.grid ? "cursor-pointer text-ink-soft" : "cursor-not-allowed text-ink-faint"
+            }`}
+          >
+            <input
+              type="checkbox"
+              checked={opt.sperren}
+              disabled={!opt.grid}
+              onChange={(e) => setOpt((o) => ({ ...o, sperren: e.target.checked }))}
+              className="mt-0.5 h-3.5 w-3.5 rounded border border-line"
+            />
+            <span>
+              Analyse sperren
+              <br />
+              <span className="text-ink-faint">
+                Sicher gegen Nachrechnen — dafür lässt sich der Track in Traktor erst nach
+                Rechtsklick → Analyse entsperren neu analysieren.
+              </span>
+            </span>
+          </label>
+        </div>
+
         <button
           onClick={() => {
-            const { content, playlists } = nmlPlaylists(items, state, set.name);
+            const { content, playlists, mitGrid } = nmlPlaylists(items, state, set.name, opt);
             download(content, `${safeName(set.name)}.nml`, "application/xml");
-            toast(`${playlists} Phasen-Playlists als .nml`);
+            toast(`${playlists} Phasen-Playlists · ${mitGrid} mit Grid`);
           }}
           className="flex h-9 items-center gap-1.5 rounded-md bg-accent px-3 text-[12px] font-medium text-on-accent"
         >
@@ -249,9 +295,9 @@ export function HandoffView({ tracks }: { tracks: Track[] }) {
 
         <button
           onClick={() => {
-            const { content, tracks: n } = nmlSinglePlaylist(items, state, set.name);
+            const { content, tracks: n, mitGrid } = nmlSinglePlaylist(items, state, set.name, opt);
             download(content, `${safeName(set.name)} – eine Liste.nml`, "application/xml");
-            toast(`${n} Tracks als eine Playlist`);
+            toast(`${n} Tracks · ${mitGrid} mit Grid`);
           }}
           className="flex h-9 items-center gap-1.5 rounded-md border border-line px-3 text-[12px] text-ink-soft transition-colors hover:text-ink"
         >
@@ -342,13 +388,13 @@ export function HandoffView({ tracks }: { tracks: Track[] }) {
 
         <div className="mt-1 border-t border-line pt-3">
           <div className="mb-1.5 flex items-center gap-1.5 text-[11px] text-ink-soft">
-            <Warning size={13} weight="regular" /> Noch nicht gebaut
+            <Warning size={13} weight="regular" /> Was das Grid nicht kann
           </div>
           <p className="text-[11px] leading-relaxed text-ink-soft">
-            Das Beatgrid für die {counts.bestaetigt} bestätigten Tracks mitschreiben, damit Traktor
-            sie nicht neu analysiert. Dafür fehlt noch die Bedeutung von{" "}
-            <code className="text-ink">FLAGS</code> — ohne sie ist nicht gesichert, dass Traktor die
-            Nachanalyse wirklich auslässt.
+            Geschätzte Werte bekommen kein Grid — {counts.geschaetzt + counts.offen} Tracks bleiben
+            damit Traktors Aufgabe. Und auch bei den bestätigten ist die belastbare Untergrenze
+            92 %: unter zwölf Tracks kann einer ein Raster bekommen, das wegläuft. Beim ersten Set
+            lohnt ein kurzer Blick auf die Wellenform.
           </p>
         </div>
       </section>

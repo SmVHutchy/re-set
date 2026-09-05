@@ -264,6 +264,7 @@ for (const [idx, f] of files.entries()) {
       bpm,
       keyEstimated: false,
       bpmEstimated: false,
+      gridMs: null,
       bpmQuality: bpm ? 100 : null,
       dur,
       bitrate,
@@ -333,6 +334,10 @@ if (analyze) {
         if (r.error) log(`  ${basename(r.file)} — Analyse fehlgeschlagen: ${r.error}`);
         continue;
       }
+      // Der Raster-Anker wandert mit in die NML: ohne ihn ist ein BPM-Wert
+      // nur eine Zahl, mit ihm ein Beatgrid. nml.ts liest ihn als CUE_V2
+      // TYPE=4 wieder ein, der Export gibt ihn an Traktor weiter.
+      if (r.grid_ms != null) e.gridMs = r.grid_ms;
       if (!e.bpm && r.bpm) {
         e.bpm = r.bpm;
         e.bpmEstimated = true;
@@ -377,6 +382,13 @@ function entryXml(e) {
   const tempoNode = e.bpm
     ? `\n    <TEMPO BPM="${Number(e.bpm).toFixed(6)}" BPM_QUALITY="${Number(e.bpmQuality ?? 0).toFixed(6)}"></TEMPO>`
     : "";
+
+  // Grid-Anker als CUE_V2 TYPE=4 — dieselbe Form, die Traktor selbst schreibt
+  // (Name "AutoGrid", kein Slot, keine Laenge). Aus 679 echten Cues abgeleitet.
+  const gridNode =
+    e.gridMs != null && e.bpm
+      ? `\n    <CUE_V2 NAME="AutoGrid" DISPL_ORDER="0" TYPE="4" START="${Number(e.gridMs).toFixed(6)}" LEN="0.000000" REPEATS="-1" HOTCUE="-1"></CUE_V2>`
+      : "";
 
   // FOLDER ist unsere eigene Erweiterung (wie COVERART/AUDIO) und trägt das
   // Gruppen-Label für die Library-Ansicht.

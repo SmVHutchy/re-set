@@ -74,8 +74,11 @@ def tempo_of(onset, sr: int, start_bpm: float, std_bpm: float) -> float | None:
 SR = 22050
 
 
-def refine_tempo(y, sr: int, coarse_bpm: float) -> float | None:
-    """Verfeinert eine Tempo-Schaetzung ueber die erkannten Schlagzeitpunkte.
+def refine_tempo(y, sr: int, coarse_bpm: float):
+    """Verfeinert Tempo und Raster-Anker ueber die erkannten Schlagzeitpunkte.
+
+    Liefert `(bpm, anker_s)` — das Tempo und die Position eines Schlages,
+    gemessen ab Fensterbeginn.
 
     Das Tempogramm kann nur Werte auf einem festen Raster liefern
     (Tempo = 60 * Bildrate / ganzzahliger Versatz). Bei Standard-Fensterung
@@ -109,7 +112,23 @@ def refine_tempo(y, sr: int, coarse_bpm: float) -> float | None:
     good = d[np.abs(d - med) < 0.15 * med]
     if good.size < 8:
         return None
-    return float(60.0 / good.mean())
+    beat_s = float(good.mean())
+
+    # Anker: Ausgleichsgerade durch die brauchbaren Schlagzeitpunkte statt
+    # eines einzelnen Schlags. Die Zeitaufloesung der Schlagerkennung liegt bei
+    # rund 23 ms; ueber viele Schlaege gemittelt bleibt davon deutlich weniger,
+    # und ein Anker, der um 23 ms danebenliegt, verschiebt das ganze Raster.
+    idx = np.arange(beats.size, dtype=float)
+    try:
+        steigung, achsenabschnitt = np.polyfit(idx, beats, 1)
+    except Exception:
+        return None
+    # Die Gerade nur benutzen, wenn ihre Steigung zum robusten Mittel passt —
+    # sonst hat die Schlagerkennung Schlaege ausgelassen und die Gerade kippt.
+    if abs(steigung - beat_s) > 0.1 * beat_s:
+        achsenabschnitt = float(beats[0])
+
+    return 60.0 / beat_s, float(achsenabschnitt)
 
 
 def tempo_ioi(y, sr: int, lo: float, hi: float) -> float | None:
@@ -258,6 +277,7 @@ def analyze(path: str, args) -> dict:
     tempos = []
     alts = []
     chromas = []
+    anker = None  # Sekunden ab Trackbeginn, Position irgendeines Schlages
 
     for offset, length in windows(total, args.windows, args.window_seconds):
         y, sr = librosa.load(path, sr=SR, mono=True, offset=offset, duration=length)
@@ -269,9 +289,14 @@ def analyze(path: str, args) -> dict:
             # Das Raster nur verlassen, wenn die Verfeinerung in der Naehe
             # bleibt — ein Sprung waere ein Zeichen, dass die Schlagerkennung
             # etwas anderes gefunden hat als das Tempogramm.
-            fine = refine_tempo(y, sr, t)
-            if fine and abs(fine - t) / t < 0.08:
-                t = fine
+            verfeinert = refine_tempo(y, sr, t)
+            if verfeinert:
+                fine, anker_lokal = verfeinert
+                if abs(fine - t) / t < 0.08:
+                    t = fine
+                    # Absolute Position im Track: Fensterversatz plus Anker.
+                    if anker is None:
+                        anker = (offset or 0.0) + anker_lokal
         if t:
             tempos.append(t)
         if args.second_estimator:
@@ -311,9 +336,18 @@ def analyze(path: str, args) -> dict:
         bpm_alt = round(float(np.median(alts)), 2)
         agree = abs(bpm_alt - bpm) / max(1e-6, bpm) < args.agree_tolerance
 
+    # Den Anker auf den ersten Schlag des Tracks zurueckrechnen: Traktor
+    # braucht nur *einen* Punkt auf dem Raster, aber einer nahe null ist
+    # anschaulicher und ueberlebt das Kuerzen eines Tracks.
+    grid_ms = None
+    if anker is not None and bpm > 0:
+        schlag = 60.0 / bpm
+        grid_ms = round((anker % schlag) * 1000.0, 2)
+
     return {
         "file": path,
         "bpm": round(bpm, 2),
+        "grid_ms": grid_ms,
         "bpm_raw": round(raw, 2),
         "bpm_alt": bpm_alt,
         "bpm_agree": agree,

@@ -62,6 +62,15 @@ const near = (a, b) => Math.abs(a - b) / b < 0.02;
 let bpmExact = 0;
 let bpmOctave = 0;
 let bpmWrong = 0;
+// Die Teilmenge, in der beide Schaetzer dasselbe sagen. Nur sie entscheidet,
+// ob wir Beatgrids schreiben duerfen: ein falsches Grid rechnet Traktor nicht
+// nach, der Versatz faellt erst beim Auflegen auf.
+let agreeN = 0;
+let agreeExact = 0;
+let agreeOctave = 0;
+let agreeWrong = 0;
+let disagreeN = 0;
+let disagreeExact = 0;
 let keyExact = 0;
 let keyRelative = 0;
 let keyWrong = 0;
@@ -104,6 +113,16 @@ for (const r of rows) {
     keyVerdict = "falsch";
   }
 
+  if (r.bpm_agree === true) {
+    agreeN++;
+    if (bpmVerdict === "exakt") agreeExact++;
+    else if (bpmVerdict === "Oktave") agreeOctave++;
+    else agreeWrong++;
+  } else if (r.bpm_agree === false) {
+    disagreeN++;
+    if (bpmVerdict === "exakt") disagreeExact++;
+  }
+
   if (bpmVerdict !== "exakt" || keyVerdict !== "exakt") {
     misses.push({
       test: e.test,
@@ -126,6 +145,18 @@ console.log(`  brauchbar (exakt+Okt): ${bpmExact + bpmOctave}  ${pct(bpmExact + 
 console.log(`Key exakt             : ${keyExact}  ${pct(keyExact)}`);
 console.log(`Key parallel          : ${keyRelative}  ${pct(keyRelative)}`);
 console.log(`Key falsch            : ${keyWrong}  ${pct(keyWrong)}`);
+
+if (agreeN || disagreeN) {
+  const p = (x, base) => (base ? `${((x / base) * 100).toFixed(1)} %` : "—");
+  console.log(`
+--- Zweiter Schaetzer: Uebereinstimmung ---`);
+  console.log(`beide einig           : ${agreeN} von ${n}  (${p(agreeN, n)} Abdeckung)`);
+  console.log(`  davon exakt         : ${agreeExact}  ${p(agreeExact, agreeN)}   <-- entscheidet ueber AP-C`);
+  console.log(`  davon Oktavfehler   : ${agreeOctave}  ${p(agreeOctave, agreeN)}`);
+  console.log(`  davon falsch        : ${agreeWrong}  ${p(agreeWrong, agreeN)}`);
+  console.log(`uneinig               : ${disagreeN}`);
+  console.log(`  davon exakt         : ${disagreeExact}  ${p(disagreeExact, disagreeN)}`);
+}
 
 if (process.env.EVAL_DETAIL) {
   console.log("\nAbweichungen:");

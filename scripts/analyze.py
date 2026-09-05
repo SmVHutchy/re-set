@@ -73,6 +73,92 @@ def tempo_of(onset, sr: int, start_bpm: float, std_bpm: float) -> float | None:
 
 SR = 22050
 
+
+def refine_tempo(y, sr: int, coarse_bpm: float) -> float | None:
+    """Verfeinert eine Tempo-Schaetzung ueber die erkannten Schlagzeitpunkte.
+
+    Das Tempogramm kann nur Werte auf einem festen Raster liefern
+    (Tempo = 60 * Bildrate / ganzzahliger Versatz). Bei Standard-Fensterung
+    liegen die moeglichen Werte um 145 BPM rund 3,5 BPM auseinander — ein
+    Track mit 147 BPM ist damit nicht darstellbar, das Verfahren muss auf
+    143,55 oder 152 ausweichen und liegt zwangslaeufig 2–3 % daneben.
+
+    Gemessen: 60 Tracks ergaben nur 14 verschiedene Werte, und jeder Fehlgriff
+    trotz Uebereinstimmung beider Schaetzer war genau dieser Rasterfehler.
+
+    Der Ausweg fuehrt ueber die Schlagzeitpunkte: deren mittlerer Abstand ist
+    nicht gerastert, weil sich der Quantisierungsfehler einzelner Abstaende
+    ueber viele Schlaege herausmittelt.
+    """
+    try:
+        _, beats = librosa.beat.beat_track(y=y, sr=sr, start_bpm=coarse_bpm, units="time")
+    except Exception:
+        return None
+    beats = np.atleast_1d(beats)
+    if beats.size < 12:
+        return None
+
+    d = np.diff(beats)
+    if d.size < 8:
+        return None
+    med = float(np.median(d))
+    if med <= 0:
+        return None
+    # Ausreisser raus: uebersprungene oder doppelt gesetzte Schlaege wuerden
+    # den Mittelwert sonst verziehen.
+    good = d[np.abs(d - med) < 0.15 * med]
+    if good.size < 8:
+        return None
+    return float(60.0 / good.mean())
+
+
+def tempo_ioi(y, sr: int, lo: float, hi: float) -> float | None:
+    """Zweiter, unabhaengiger Tempo-Schaetzer ueber Onset-Abstaende.
+
+    Der erste Schaetzer korreliert die Onset-Huellkurve mit sich selbst
+    (Tempogramm). Dieser hier arbeitet auf den *erkannten Onset-Zeitpunkten*
+    und zaehlt aus, welcher Abstand am haeufigsten vorkommt — eine andere
+    Algorithmenfamilie mit anderen Fehlermoden.
+
+    Einschraenkung, die man kennen muss: beide teilen sich die Onset-Erkennung.
+    Wo die schon danebenliegt, koennen sich beide einig und trotzdem falsch
+    sein. Deshalb laeuft dieser Schaetzer mit anderer Fensterung (hop 256 statt
+    512), damit wenigstens die Zeitaufloesung nicht dieselbe ist.
+    """
+    onsets = librosa.onset.onset_detect(
+        y=y, sr=sr, hop_length=256, units="time", backtrack=False
+    )
+    if onsets.size < 8:
+        return None
+
+    # Abstaende ueber mehrere Schritte, jeweils auf einen Schlag normiert:
+    # liegt zwischen zwei Onsets ein Takt, liefert der Vierer-Schritt denselben
+    # Wert wie der Einer-Schritt zwischen zwei Schlaegen.
+    intervals = []
+    for k in range(1, 5):
+        if onsets.size <= k:
+            break
+        d = (onsets[k:] - onsets[:-k]) / k
+        intervals.append(d[d > 0.05])  # unter 50 ms ist kein Schlagabstand
+    if not intervals:
+        return None
+    iois = np.concatenate(intervals)
+    if iois.size < 8:
+        return None
+
+    bpms = np.array([fold_bpm(60.0 / x, lo, hi) for x in iois])
+    # 0,5-BPM-Klassen, leicht geglaettet — sonst entscheidet ein einzelnes
+    # Histogramm-Fach ueber das Ergebnis.
+    edges = np.arange(lo, hi + 0.5, 0.5)
+    hist, _ = np.histogram(bpms, bins=edges)
+    if hist.sum() == 0:
+        return None
+    kernel = np.array([1.0, 2.0, 3.0, 2.0, 1.0])
+    smooth = np.convolve(hist.astype(float), kernel / kernel.sum(), mode="same")
+    i = int(np.argmax(smooth))
+    return float((edges[i] + edges[i + 1]) / 2)
+
+
 # Tonart-Profile: Gewichte, wie stark jede Stufe in Dur bzw. Moll vertreten
 # ist. Die Korrelation des Chroma-Mittels mit allen 24 Rotationen liefert die
 # wahrscheinlichste Tonart. Welches Profil am besten trifft, haengt vom
@@ -170,6 +256,7 @@ def estimate_key(chroma_mean: np.ndarray, profile_name: str):
 def analyze(path: str, args) -> dict:
     total = librosa.get_duration(path=path)
     tempos = []
+    alts = []
     chromas = []
 
     for offset, length in windows(total, args.windows, args.window_seconds):
@@ -178,8 +265,19 @@ def analyze(path: str, args) -> dict:
             continue
         onset = librosa.onset.onset_strength(y=y, sr=sr)
         t = tempo_of(onset, sr, args.start_bpm, args.std_bpm)
+        if t and args.refine:
+            # Das Raster nur verlassen, wenn die Verfeinerung in der Naehe
+            # bleibt — ein Sprung waere ein Zeichen, dass die Schlagerkennung
+            # etwas anderes gefunden hat als das Tempogramm.
+            fine = refine_tempo(y, sr, t)
+            if fine and abs(fine - t) / t < 0.08:
+                t = fine
         if t:
             tempos.append(t)
+        if args.second_estimator:
+            alt = tempo_ioi(y, sr, args.bpm_min, args.bpm_max)
+            if alt:
+                alts.append(alt)
         # Schlagzeug faerbt das Chroma-Bild ein und verschiebt die Tonart.
         # Die harmonische Komponente zu isolieren kostet Rechenzeit, ist bei
         # elektronischer Musik mit lauten Drums aber oft der Unterschied.
@@ -204,10 +302,21 @@ def analyze(path: str, args) -> dict:
 
     key, camelot, key_conf = estimate_key(np.mean(chromas, axis=0), args.key_profile)
 
+    # Uebereinstimmung der beiden Verfahren. Nur wo beide dasselbe sagen, darf
+    # spaeter ein Beatgrid geschrieben werden — ein falsches Grid ist schlimmer
+    # als keins, weil Traktor es nicht nachrechnet.
+    bpm_alt = None
+    agree = None
+    if alts:
+        bpm_alt = round(float(np.median(alts)), 2)
+        agree = abs(bpm_alt - bpm) / max(1e-6, bpm) < args.agree_tolerance
+
     return {
         "file": path,
         "bpm": round(bpm, 2),
         "bpm_raw": round(raw, 2),
+        "bpm_alt": bpm_alt,
+        "bpm_agree": agree,
         "bpm_confidence": bpm_conf,
         "key": key,
         "camelot": camelot,
@@ -225,6 +334,16 @@ def main() -> int:
     # Standard ist ks: gegen den Testsatz gemessen die beste der drei
     # Varianten (55,2 % gegen 44,8 % shaath und 41,4 % temperley) — trotz der
     # Erwartung, dass ein auf elektronische Musik getrimmtes Profil vorn liegt.
+    ap.add_argument("--refine", action="store_true", default=True,
+                    help="Tempo ueber die Schlagzeitpunkte verfeinern (Standard an)")
+    ap.add_argument("--no-refine", dest="refine", action="store_false",
+                    help="Verfeinerung abschalten (nur Tempogramm-Raster)")
+    ap.add_argument("--second-estimator", action="store_true", default=True,
+                    help="zweiten Tempo-Schaetzer mitrechnen (Standard an)")
+    ap.add_argument("--no-second-estimator", dest="second_estimator", action="store_false",
+                    help="zweiten Schaetzer abschalten (schneller)")
+    ap.add_argument("--agree-tolerance", type=float, default=0.02,
+                    help="relative Abweichung, bis zu der beide Schaetzer als einig gelten")
     ap.add_argument("--key-profile", choices=sorted(KEY_PROFILES), default="ks",
                     help="Tonart-Profil (Standard ks — am Testsatz gemessen)")
     ap.add_argument("--chroma", choices=["cqt", "cens"], default="cqt", help="Chroma-Variante")

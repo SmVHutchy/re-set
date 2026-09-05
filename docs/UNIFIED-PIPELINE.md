@@ -214,36 +214,50 @@ Wirkung in Zahlen: **1155 Tracks** (24,4 % der Sammlung) zeigen ab sofort ihren 
 
 ### 6.2 Gemessen: was die Analyse trifft
 
-Blindtest, 29 tagfreie Kopien über 12 BPM-Bänder (71–190 BPM), Erwartung aus Traktors eigener Analyse. Reproduzierbar mit:
+Zwei Blindtests aus tagfreien Kopien mit bekannter Traktor-Analyse. Reproduzierbar mit `node scripts/eval-analysis.mjs <testordner>`.
 
-```bash
-node scripts/eval-analysis.mjs <testordner>
-```
+- **Satz A** — 29 Tracks, über zwölf Tempo-Bänder **gleichverteilt**. Zeigt die Ränder, misst aber pessimistisch: langsame Tracks sind dort 20 %, in der Sammlung 1,8 %.
+- **Satz B** — 60 Tracks, **zufällig gezogen** (Verteilung 80:1 · 120:4 · 130:14 · 140:30 · 150:7 · 160:2 · 170:2). Der Satz, der die Sammlung schätzt.
 
-| Konfiguration | BPM exakt | BPM brauchbar¹ | Key exakt |
-|---|---|---|---|
-| librosa-Standardprior (120 ± 1) | 44,8 % | 62,1 % | — |
-| **Prior 140 ± 8 · Krumhansl-Schmuckler · CQT** ← Standard | **55,2 %** | **79,3 %** | **55,2 %** |
-| Prior 150 ± 20 | 55,2 % | 79,3 % | — |
-| Key-Profil Shaath | | | 44,8 % |
-| Key-Profil Temperley | | | 41,4 % |
-| Shaath + Perkussion entfernt | | | 44,8 % |
-| Shaath + CENS-Chroma | | | 48,3 % |
-| Shaath + Perkussion entfernt + CENS | | | 51,7 % |
-| Krumhansl-Schmuckler + CENS-Chroma | | | 51,7 % |
-| Krumhansl-Schmuckler + 5 Fenster à 60 s | 51,7 % | 79,3 % | 48,3 % |
+| | Satz A (Ränder) | Satz B (repräsentativ) |
+|---|---|---|
+| BPM exakt (± 2 %) | 55,2 % | **78,3 %** |
+| BPM brauchbar (exakt + Oktave) | 79,3 % | 90,0 % |
+| **Tonart exakt** | 55,2 % | **35,0 %** |
 
-¹ exakt oder Oktavfehler (halbes/doppeltes Tempo) — im DJ-Kontext meist noch brauchbar, weil das Raster stimmt.
+### Der Blocker war Arithmetik, nicht Musik
 
-Drei Ergebnisse, die gegen die Erwartung liefen und ohne Messung falsch entschieden worden wären:
+60 Tracks ergaben nur **14 verschiedene BPM-Werte**: 71,78 · 73,83 · 76 · 92,29 · 112,35 · 117,45 · 129,2 · 132,51 · 136 · 139,67 · 143,55 · 152 · 161,5 · 172,27.
 
-1. **Der librosa-Standardprior ist das größte Einzelproblem.** `start_bpm=120, std_bpm=1` zieht schnelle Musik systematisch nach unten — ein 174-BPM-Track landet bei 117, weil das näher an 120 liegt. Ein breiter Prior kostet nichts und bringt zehn Punkte.
-2. **Shaath verliert gegen Krumhansl-Schmuckler**, obwohl es ausdrücklich für elektronische Musik nachjustiert wurde und in KeyFinder steckt — hier zehn Punkte schlechter.
-3. **Perkussion herauszurechnen bringt exakt null.** Die naheliegendste Verbesserung bei Musik mit lauten Drums, teuer in der Rechenzeit, ohne jede Wirkung. Mehr und längere Fenster machen es sogar schlechter.
+Das ist librosas Tempogramm-Raster — `Tempo = 60 · Bildrate / ganzzahliger Versatz`. Bei Standard-Fensterung liegen die möglichen Werte um 145 BPM rund 3,5 BPM auseinander: **ein Track mit echten 147 BPM ist nicht darstellbar.** Jeder Fehlgriff, auf den sich beide Schätzer einigten, war genau dieser Rasterfehler — 2,3 bis 3,0 % daneben. Eine strengere Einigkeits-Toleranz half nicht (87,8 % bei 0,5 %, 1 % und 2 %), weil beide Verfahren denselben falschen Gitterpunkt trafen.
 
-**Einordnung.** BPM ist brauchbar: vier von fünf Tracks bekommen ein korrektes Raster, und der häufigste Fehler ist die Oktave, die beim Mixen nicht stört. Der Key trifft nur jeden zweiten Track — als Vorsortierung taugt das, als Grundlage fürs harmonische Mixen nicht. Wer es genau braucht, lässt Traktor analysieren; die Schätzung ist der Zwischenstand, bis das passiert ist. Genau dafür ist sie als Schätzung markiert.
+`refine_tempo()` verlässt das Raster über die mittleren Schlagabstände: der Quantisierungsfehler einzelner Abstände mittelt sich über viele Schläge heraus.
 
-`bpm_confidence` misst die Einigkeit der Analysefenster, **nicht** die Richtigkeit: ein Oktavfehler ist über den ganzen Track stabil und bekommt daher Konfidenz 1,0. Der Wert taugt zum Aussortieren unruhiger Tracks, nicht als Qualitätsaussage.
+### Die Entscheidung über das Beatgrid
+
+Zwei Schätzer, deren Übereinstimmung entscheidet, ob ein Grid geschrieben werden darf:
+
+| Satz B, einige Teilmenge | ohne Verfeinerung | **mit Verfeinerung** |
+|---|---|---|
+| Abdeckung | 68,3 % | **61,7 %** (37 von 60) |
+| davon exakt | 87,8 % | **100,0 %** (37 von 37) |
+| davon Oktavfehler | 0 % | 0 % |
+| davon falsch | 12,2 % | **0** |
+
+**Damit darf AP-C für die einige Teilmenge ein Beatgrid schreiben.** Rund sechs von zehn Tracks kommen analysiert in Traktor an, die übrigen rechnet Traktor selbst.
+
+**Was 37 von 37 nicht heißt.** Null Fehler in 37 Fällen ist mit einer wahren Fehlerquote von bis zu **rund 8 %** vereinbar (Dreierregel, 95 % einseitig). Der Punktschätzer ist 100 %, die belastbare Untergrenze liegt bei etwa 92 %. Für eine größere Sicherheit braucht es einen größeren Satz — die Grundwahrheit dafür liegt vor (497 Tracks), es kostet nur Rechenzeit.
+
+**Was nicht geschrieben werden darf.** Die Tonart trifft in Satz B nur **35 %**. Sie geht als Schätzung mit und wird als solche markiert, aber sie ist keine Grundlage fürs harmonische Mixen — dafür bleibt Traktors eigene Analyse maßgeblich.
+
+### Was dabei widerlegt wurde
+
+- **Der librosa-Standardprior** (120 ± 1) zieht schnelle Musik nach unten: ein 174-BPM-Track landet bei 117. Ein breiter Prior bringt zehn Punkte.
+- **Shaath**, ausdrücklich für elektronische Musik gemacht, liegt zehn Punkte hinter dem klassischen Krumhansl-Schmuckler.
+- **Perkussion vor der Tonartschätzung zu entfernen bringt null**, bei deutlich höherer Rechenzeit. Mehr und längere Fenster machen es schlechter.
+- **„Uneinigkeit heißt immer falsch"** galt in Satz A (0 von 7 richtig) und ist in Satz B widerlegt: dort sind 43,5 % der uneinigen Tracks trotzdem exakt. Ein Kleinstichproben-Artefakt — Uneinigkeit ist ein Grund, kein Grid zu schreiben, kein Beweis für einen Fehler.
+
+`bpm_confidence` misst die Einigkeit der Analysefenster, **nicht** die Richtigkeit: ein Oktavfehler ist über den ganzen Track stabil und bekommt Konfidenz 1,0.
 
 ---
 

@@ -283,17 +283,41 @@ Zwei Schätzer, deren Übereinstimmung entscheidet, ob ein Grid geschrieben werd
 
 **Ein Track kann mehrere Grid-Anker haben.** 586 der 588 Tracks tragen genau einen — aber einer hat fünf und einer sechs (manuell korrigierte Raster). Die naheliegende Modellierung „Traktor: ein Anker, Rekordbox: mehrere Punkte" ist damit falsch, und ein `gridAnchorMs: number` im Adapter hätte bei genau diesen Tracks Daten verschluckt. `TrackState.gridAnchorsMs` ist deshalb eine Liste.
 
+### Die Analyse-Sperre — der Hebel gegen Traktors Nachrechnen
+
+Das eigentliche Ziel der Kette ist, dass Traktor fertige Tracks nicht noch einmal analysiert. Der Mechanismus dafür ist in der Collection auszählbar:
+
+| | Anzahl | `FLAGS` |
+|---|---|---|
+| `ENTRY LOCK="1"` | 13 | **28 bei allen 13** |
+| analysiert, ohne Sperre | 575 | 12 (545×) · 8 (30×) |
+| roh | 4113 | nicht gesetzt |
+
+28 = 16 + 8 + 4 · 12 = 8 + 4 · 8 = 8. Daraus:
+
+- **Bit 8 — analysiert.** In allen 588 analysierten Einträgen gesetzt, in keinem rohen.
+- **Bit 16 — Analyse gesperrt.** Tritt ausschließlich zusammen mit `LOCK="1"` auf, 13 von 13. Dazu gehört `LOCK_MODIFICATION_TIME` (ebenfalls genau 13×).
+- **Bit 4 — unbekannt.** 558 haben es, 30 nicht. Beide Gruppen haben Tonart, Loudness und Cover zu 100 %; kein geprüftes Feld trennt sie. Wird nicht gebraucht und wird nicht geschrieben.
+
+Bestätigt wird das von außen: Lexicon sperrt beim Export nach Traktor die Analyse **automatisch und standardmäßig** — der Support-Thread dazu existiert, weil Nutzer sich über das Schloss wundern ([discuss.lexicondj.com](https://discuss.lexicondj.com/t/traktor-analysis-lock-issue/269)).
+
+**Preis der Sperre:** ein gesperrter Track lässt sich in Traktor nicht neu analysieren, bis das Schloss über Rechtsklick fällt. Liegt unser Grid daneben, ist die Korrektur damit zwei Klicks statt keiner. Deshalb gehört das Sperren in die Oberfläche als sichtbarer Schalter, nicht als stille Voreinstellung.
+
+### Bewertung: die Skala ist dokumentiert
+
+Ein Stern entspricht **51**: `RANKING` 0 · 51 · 102 · 153 · 204 · 255 (aus dem reverse-engineerten NML-Dokument von [plow](https://github.com/maxwell-and-millfield/plow/blob/master/doc/collection%20(reverse%20engineered).nml.xml)).
+
+In dieser Collection kommt allerdings **nur der Wert 25** vor, bei 16 Tracks — das passt auf keinen Stern. Die Werte stammen also nicht aus Traktor, sondern kamen aus den Datei-Tags mit und werden in der Oberfläche entsprechend nicht als Sterne angezeigt.
+
 ### Nicht belegt — offen
 
 | Element | Stand |
 |---|---|
 | `CUE_V2 @TYPE` 1, 2, 3 | in den Daten **nicht vorgekommen**. Traktors Oberfläche kennt Fade-In, Fade-Out und Load — welche Zahl welche ist, bleibt offen |
-| `CUE_V2 @REPEATS` | vorhanden, Bedeutung ungeklärt |
-| `CUE_V2 @DISPL_ORDER` | vorhanden, vermutlich Anzeigereihenfolge — ungeprüft |
-| `INFO @RANKING` | nur **ein** Wert in der ganzen Collection (25, bei 16 Tracks). Mit einem Datenpunkt ist keine Skala bestimmbar |
-| `INFO @PLAYCOUNT` | Werte 1 und 2 — plausibel ein Zähler, aber die Spanne ist zu klein für eine Aussage |
-
-Diese Zeilen schließt das Diff-Experiment, sobald du in Traktor einen Fade-Cue setzt und einen Track bewertest.
+| `CUE_V2 @REPEATS` · `@DISPL_ORDER` | vorhanden, Bedeutung ungeklärt |
+| `FLAGS` Bit 4 | siehe oben — kein Feld trennt die beiden Gruppen |
+| **Genügt Bit 8 allein?** | Ob Traktor einen importierten Track mit `TEMPO` + Grid + Bit 8, **aber ohne Sperre**, trotzdem neu analysiert, ist die letzte offene Frage. Sie entscheidet nur, ob die Sperre Pflicht oder Option ist |
+| `INFO @PLAYCOUNT` | Werte 1 und 2 — plausibel ein Zähler, Spanne zu klein für eine Aussage |
 
 ### Die Methode: Diff-Experiment
 

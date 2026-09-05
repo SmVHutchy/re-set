@@ -27,9 +27,17 @@ const FOLDER_KEY = "reset.triage.folder";
 export function TriageView({
   tracks,
   onPreview,
+  previewId,
+  onTogglePlay,
+  startAt,
+  onStartAt,
 }: {
   tracks: Track[];
   onPreview: (id: string) => void;
+  previewId: string | null;
+  onTogglePlay: () => void;
+  startAt: number;
+  onStartAt: (v: number) => void;
 }) {
   const { state, dispatch } = useStore();
   const set = activeSet(state);
@@ -75,7 +83,6 @@ export function TriageView({
     [inFolder, setIds, state.dismissed],
   );
 
-  const current = queue[0] ?? null;
   const done = inFolder.length - queue.length;
 
   const setTracks = useMemo(() => {
@@ -98,37 +105,66 @@ export function TriageView({
   // --- Aktionen -------------------------------------------------------------
   const judge = useCallback(
     (phase: Phase) => {
-      if (!current) return;
-      dispatch({ type: "addToSet", trackId: current.id });
-      dispatch({ type: "setPhase", id: current.id, phase });
-      toast(`${PHASE_LABEL[phase]} · ${current.title}`);
+      if (!shownRef.current) return;
+      const t = shownRef.current;
+      dispatch({ type: "addToSet", trackId: t.id });
+      dispatch({ type: "setPhase", id: t.id, phase });
+      setJumpTo(null);
+      toast(`${PHASE_LABEL[phase]} · ${t.title}`);
     },
-    [current, dispatch],
+    [dispatch],
   );
 
   const drop = useCallback(() => {
-    if (!current) return;
-    dispatch({ type: "dismiss", id: current.id });
-  }, [current, dispatch]);
+    if (!shownRef.current) return;
+    setJumpTo(null);
+    dispatch({ type: "dismiss", id: shownRef.current.id });
+  }, [dispatch]);
 
   const skip = useCallback(() => {
+    const current = shownRef.current;
     if (!current) return;
     // Zurückstellen statt aussortieren: ans Ende, indem wir es kurz
     // aussortieren und sofort zurückholen, wäre unsauber — stattdessen
     // merken wir uns die Zurückgestellten getrennt.
+    setJumpTo(null);
     setDeferred((d) => [...d, current.id]);
-  }, [current]);
+  }, []);
 
   const [deferred, setDeferred] = useState<string[]>([]);
+  // Ein angeklicktes Cover wird vorgezogen — man sieht in der Warteschlange
+  // etwas Interessantes und will es sofort beurteilen, nicht in dreissig
+  // Tracks. Zurueckgestellte wandern ans Ende.
+  const [jumpTo, setJumpTo] = useState<string | null>(null);
   const orderedQueue = useMemo(() => {
     const back = new Set(deferred);
-    return [...queue.filter((t) => !back.has(t.id)), ...queue.filter((t) => back.has(t.id))];
-  }, [queue, deferred]);
+    const front = queue.filter((t) => !back.has(t.id));
+    const rear = queue.filter((t) => back.has(t.id));
+    const all = [...front, ...rear];
+    if (!jumpTo) return all;
+    const picked = all.find((t) => t.id === jumpTo);
+    return picked ? [picked, ...all.filter((t) => t.id !== jumpTo)] : all;
+  }, [queue, deferred, jumpTo]);
   const shown = orderedQueue[0] ?? null;
 
+  // Beim Sichten wird nicht auf Zuruf gehoert, sondern automatisch: wer 304
+  // Tracks beurteilt, soll den naechsten hoeren, sobald er da ist — nicht erst
+  // eine Taste dafuer druecken. Der Player bleibt sonst auf dem alten Track
+  // stehen, und man urteilt ueber das, was gerade laeuft.
+  const [autoplay, setAutoplay] = useState(true);
+
+  useEffect(() => {
+    if (autoplay && shown && shown.audioPath && previewId !== shown.id) {
+      onPreview(shown.id);
+    }
+  }, [autoplay, shown, previewId, onPreview]);
+
+  // Leertaste: laeuft der gezeigte Track schon, anhalten statt neu starten.
   const preview = useCallback(() => {
-    if (shown) onPreview(shown.id);
-  }, [shown, onPreview]);
+    if (!shown) return;
+    if (previewId === shown.id) onTogglePlay();
+    else onPreview(shown.id);
+  }, [shown, previewId, onPreview, onTogglePlay]);
 
   // --- Tastatur -------------------------------------------------------------
   useEffect(() => {
@@ -136,6 +172,10 @@ export function TriageView({
       const el = e.target as HTMLElement | null;
       if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable)) return;
       if (e.metaKey || e.ctrlKey || e.altKey) return;
+      // Gedrueckt gehaltene Taste ignorieren: die Tastaturwiederholung des
+      // Systems wuerde sonst mehrere Tracks in einem Rutsch beurteilen, ohne
+      // dass man sie gehoert hat. Eine Entscheidung braucht einen Anschlag.
+      if (e.repeat) return;
 
       if (e.key === " ") {
         e.preventDefault();
@@ -156,6 +196,7 @@ export function TriageView({
   }, [preview]);
 
   // Refs, damit der Tastatur-Listener nicht bei jedem Track neu gebunden wird.
+  const shownRef = useRefLatest(shown);
   const judgeRef = useRefLatest(judge);
   const dropRef = useRefLatest(drop);
   const skipRef = useRefLatest(skip);
@@ -209,23 +250,39 @@ export function TriageView({
           />
         </div>
 
-        <div className="max-h-[420px] overflow-y-auto">
+        <div className="grid max-h-[440px] grid-cols-3 gap-1.5 overflow-y-auto">
           {orderedQueue.slice(0, 60).map((t, i) => (
-            <div
+            <button
               key={t.id}
-              className={`truncate border-t border-line py-1 text-[11px] first:border-t-0 ${
-                i === 0 ? "text-ink" : "text-ink-faint"
+              onClick={() => setJumpTo(t.id)}
+              title={`${t.artist} – ${t.title}`}
+              className={`aspect-square overflow-hidden rounded-sm transition-opacity ${
+                i === 0 ? "outline outline-1 outline-accent" : "opacity-60 hover:opacity-100"
               }`}
             >
-              {t.artist} – {t.title}
-            </div>
+              {t.coverPath ? (
+                <img
+                  src={t.coverPath}
+                  alt=""
+                  loading="lazy"
+                  onError={(e) => {
+                    e.currentTarget.style.display = "none";
+                  }}
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <span className="flex h-full w-full items-center justify-center bg-raise text-[8px] text-ink-faint">
+                  {t.title.slice(0, 2)}
+                </span>
+              )}
+            </button>
           ))}
-          {orderedQueue.length > 60 && (
-            <div className="border-t border-line pt-1 font-mono text-[10px] text-ink-faint">
-              … {orderedQueue.length - 60} weitere
-            </div>
-          )}
         </div>
+        {orderedQueue.length > 60 && (
+          <div className="mt-1.5 font-mono text-[10px] text-ink-faint">
+            … {orderedQueue.length - 60} weitere
+          </div>
+        )}
       </section>
 
       {/* Bühne */}
@@ -280,6 +337,38 @@ export function TriageView({
               >
                 <SkipForward size={13} weight="regular" /> später
               </button>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-center gap-3 border-t border-line pt-3 text-[11px] text-ink-soft">
+              <label className="flex cursor-pointer items-center gap-1.5">
+                <input
+                  type="checkbox"
+                  checked={autoplay}
+                  onChange={(e) => setAutoplay(e.target.checked)}
+                  className="h-3.5 w-3.5 rounded border border-line"
+                />
+                automatisch vorhören
+              </label>
+              <span className="flex items-center gap-1">
+                Einstieg
+                {[
+                  { v: 0, l: "Anfang" },
+                  { v: 0.35, l: "35 %" },
+                  { v: 0.5, l: "Mitte" },
+                ].map((o) => (
+                  <button
+                    key={o.v}
+                    onClick={() => onStartAt(o.v)}
+                    className={`rounded border px-1.5 py-0.5 font-mono text-[10px] transition-colors ${
+                      startAt === o.v
+                        ? "border-accent text-accent"
+                        : "border-line text-ink-faint hover:text-ink"
+                    }`}
+                  >
+                    {o.l}
+                  </button>
+                ))}
+              </span>
             </div>
 
             <p className="text-center font-mono text-[10px] leading-relaxed text-ink-soft">

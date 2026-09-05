@@ -1,5 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { parseNml, type Track } from "./lib/nml";
+import type { MiniPlayerHandle } from "./components/MiniPlayer";
 import { PHASES, PHASE_COLOR, type Phase } from "./lib/tags";
 import { useStore, getTags, activeSet } from "./lib/store/StoreProvider";
 import { isTagged, type PersistState } from "./lib/store/types";
@@ -138,6 +139,10 @@ export function App() {
   const [selection, setSelection] = useState<Set<string>>(new Set());
   const [activeCrateId, setActiveCrateId] = useState<string | null>(null);
   const [previewId, setPreviewId] = useState<string | null>(null);
+  // Einstiegspunkt beim Vorhoeren (Anteil der Spieldauer). Beim Sichten
+  // entscheidet niemand nach dem Intro.
+  const [previewStart, setPreviewStart] = useState(0);
+  const playerRef = useRef<MiniPlayerHandle>(null);
   const [showHelp, setShowHelp] = useState(false);
   const [showLibrary, setShowLibrary] = useState(false);
   const [onboarded, setOnboarded] = useState(() => localStorage.getItem("reset.onboarded") === "1");
@@ -388,7 +393,14 @@ export function App() {
       {view === "download" ? (
         <DownloadPanel />
       ) : view === "triage" ? (
-        <TriageView tracks={tracks} onPreview={onPreview} />
+        <TriageView
+          tracks={tracks}
+          onPreview={onPreview}
+          previewId={previewId}
+          onTogglePlay={() => playerRef.current?.toggle()}
+          startAt={previewStart}
+          onStartAt={setPreviewStart}
+        />
       ) : view === "handoff" ? (
         <HandoffView tracks={tracks} />
       ) : view === "library" ? (
@@ -554,7 +566,12 @@ export function App() {
       <Toaster />
       {previewTrack && (
         <Suspense fallback={null}>
-          <MiniPlayer track={previewTrack} onClose={() => setPreviewId(null)} />
+          <MiniPlayer
+            ref={playerRef}
+            track={previewTrack}
+            startAt={view === "triage" ? previewStart : 0}
+            onClose={() => setPreviewId(null)}
+          />
         </Suspense>
       )}
       {showHelp && <HelpOverlay onClose={() => setShowHelp(false)} />}

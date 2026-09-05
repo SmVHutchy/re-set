@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import WaveSurfer from "wavesurfer.js";
 import type { Track } from "../lib/nml";
 import { Play, Pause, X } from "@phosphor-icons/react";
@@ -7,8 +7,25 @@ function cssVar(name: string): string {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || "#888";
 }
 
+/** Steuerung von außen — das Sichten bedient den Player per Tastatur. */
+export interface MiniPlayerHandle {
+  toggle(): void;
+}
+
 // Persistenter Mini-Player: läuft weiter, während man durch die Library blättert.
-export function MiniPlayer({ track, onClose }: { track: Track | null; onClose: () => void }) {
+export const MiniPlayer = forwardRef<
+  MiniPlayerHandle,
+  {
+    track: Track | null;
+    onClose: () => void;
+    /**
+     * Startposition als Anteil der Spieldauer (0–1). Beim Sichten entscheidet
+     * niemand nach dem Intro — der Track soll dort anfangen, wo er zeigt, was
+     * er kann. 0 bleibt der normale Anfang.
+     */
+    startAt?: number;
+  }
+>(function MiniPlayer({ track, onClose, startAt = 0 }, ref) {
   const containerRef = useRef<HTMLDivElement>(null);
   const wsRef = useRef<WaveSurfer | null>(null);
   const [playing, setPlaying] = useState(false);
@@ -35,6 +52,8 @@ export function MiniPlayer({ track, onClose }: { track: Track | null; onClose: (
     wsRef.current = ws;
     ws.on("ready", () => {
       setReady(true);
+      // seekTo vor play, sonst hört man kurz den Anfang und springt dann.
+      if (startAt > 0) ws.seekTo(Math.min(0.95, startAt));
       ws.play();
     });
     ws.on("play", () => setPlaying(true));
@@ -54,7 +73,11 @@ export function MiniPlayer({ track, onClose }: { track: Track | null; onClose: (
       }
       wsRef.current = null;
     };
-  }, [src]);
+  }, [src, startAt]);
+
+  useImperativeHandle(ref, () => ({
+    toggle: () => wsRef.current?.playPause(),
+  }));
 
   if (!track) return null;
 
@@ -103,4 +126,4 @@ export function MiniPlayer({ track, onClose }: { track: Track | null; onClose: (
       </div>
     </div>
   );
-}
+});

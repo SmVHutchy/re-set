@@ -288,6 +288,169 @@ function finish(job) {
   pump();
 }
 
+// ---- Uebergabe: Ordner auf der Platte schreiben ----------------------------
+// Die Ordnung der Sammlung liegt im Dateisystem, nicht in Traktors Playlists:
+// 90 Ordner, darin pre/mid/peak/late. Genau das legt diese Station an — was
+// bisher von Hand passierte.
+//
+// Zwei Festlegungen, die aus dem beobachteten Ablauf folgen:
+//   * Es wird KOPIERT, nicht verschoben. 339 Dateien liegen ohnehin in zwei
+//     bis fuenf Ordnern; ein Track gehoert in ein Set, ohne aus seinem Crate
+//     zu verschwinden.
+//   * Es wird NIE ueberschrieben und NIE geloescht. Existiert die Zieldatei
+//     schon, wird sie gemeldet und uebersprungen.
+const PHASE_DIRS = new Set(["pre", "mid", "peak", "late"]);
+
+/** Liegt `ziel` wirklich unterhalb von `wurzel`? Schutz vor ".." im Namen. */
+function liegtUnter(wurzel, ziel) {
+  const rel = path.relative(path.resolve(wurzel), path.resolve(ziel));
+  return rel !== "" && !rel.startsWith("..") && !path.isAbsolute(rel);
+}
+
+/** Dateinamen von allem befreien, was Windows oder Traktor stoert. */
+function sicherName(name) {
+  return name
+    .replace(/[<>:"/\\|?*\x00-\x1f]/g, "_")
+    .replace(/\.+$/, "")
+    .slice(0, 180);
+}
+
+/**
+ * Plant die Kopien, ohne etwas anzufassen. Antwort ist die Vorschau, die der
+ * Nutzer sieht, bevor irgendetwas passiert — und zugleich die Liste, die
+ * `apply` ausfuehrt. Was hier nicht drinsteht, wird nicht geschrieben.
+ */
+app.post("/api/handoff/plan", (req, res) => {
+  const { setName, targetRoot, items } = req.body ?? {};
+  if (!setName || typeof setName !== "string") {
+    return res.status(400).json({ error: "Kein Set-Name" });
+  }
+  if (!Array.isArray(items) || !items.length) {
+    return res.status(400).json({ error: "Keine Tracks" });
+  }
+
+  const wurzel = path.resolve(targetRoot || path.join(DOWNLOAD_ROOT, sicherName(setName)));
+  const ops = [];
+  const probleme = [];
+
+  for (const it of items) {
+    const quelle = typeof it?.path === "string" ? it.path : null;
+    const phase = PHASE_DIRS.has(it?.phase) ? it.phase : null;
+    if (!quelle) {
+      probleme.push({ grund: "kein Pfad", titel: it?.title ?? "?" });
+      continue;
+    }
+    if (!fs.existsSync(quelle)) {
+      probleme.push({ grund: "Datei nicht gefunden", titel: it?.title ?? path.basename(quelle) });
+      continue;
+    }
+    // Ohne Phase in den Wurzelordner — besser als gar nicht uebergeben.
+    const unterordner = phase ?? "ohne Phase";
+    const ziel = path.join(wurzel, unterordner, sicherName(path.basename(quelle)));
+    if (!liegtUnter(wurzel, ziel)) {
+      probleme.push({ grund: "Ziel ausserhalb des Ordners", titel: path.basename(quelle) });
+      continue;
+    }
+    let groesse = 0;
+    try {
+      groesse = fs.statSync(quelle).size;
+    } catch {
+      /* Groesse ist nur Anzeige */
+    }
+    ops.push({
+      von: quelle,
+      nach: ziel,
+      phase: unterordner,
+      groesse,
+      existiert: fs.existsSync(ziel),
+    });
+  }
+
+  const neu = ops.filter((o) => !o.existiert);
+  res.json({
+    wurzel,
+    ops,
+    probleme,
+    zusammenfassung: {
+      gesamt: ops.length,
+      neu: neu.length,
+      vorhanden: ops.length - neu.length,
+      bytes: neu.reduce((s, o) => s + o.groesse, 0),
+      ordner: [...new Set(ops.map((o) => o.phase))],
+    },
+  });
+});
+
+/**
+ * Fuehrt einen zuvor angezeigten Plan aus. `confirm` ist Pflicht: es soll
+ * nicht moeglich sein, Dateien zu schreiben, ohne die Vorschau gesehen zu
+ * haben. Fortschritt kommt als NDJSON wie bei Import und Download.
+ */
+app.post("/api/handoff/apply", (req, res) => {
+  const { wurzel, ops, confirm } = req.body ?? {};
+  if (confirm !== true) return res.status(400).json({ error: "Nicht bestaetigt" });
+  if (!wurzel || !Array.isArray(ops) || !ops.length) {
+    return res.status(400).json({ error: "Kein Plan" });
+  }
+
+  res.setHeader("Content-Type", "application/x-ndjson; charset=utf-8");
+  res.setHeader("Cache-Control", "no-cache");
+  const send = (o) => {
+    if (!res.writableEnded) res.write(JSON.stringify(o) + "\n");
+  };
+
+  const basis = path.resolve(wurzel);
+  let kopiert = 0;
+  let uebersprungen = 0;
+  let fehler = 0;
+
+  send({ type: "log", msg: `Ziel: ${basis}` });
+
+  for (const [i, o] of ops.entries()) {
+    const ziel = path.resolve(String(o?.nach ?? ""));
+    const quelle = String(o?.von ?? "");
+    // Jede einzelne Kopie noch einmal pruefen — der Plan kam vom Client.
+    if (!liegtUnter(basis, ziel)) {
+      fehler++;
+      send({ type: "log", msg: `[${i + 1}/${ops.length}] abgelehnt (ausserhalb): ${o?.nach}` });
+      continue;
+    }
+    if (!fs.existsSync(quelle)) {
+      fehler++;
+      send({ type: "log", msg: `[${i + 1}/${ops.length}] Quelle fehlt: ${quelle}` });
+      continue;
+    }
+    if (fs.existsSync(ziel)) {
+      uebersprungen++;
+      send({ type: "log", msg: `[${i + 1}/${ops.length}] liegt schon da: ${path.basename(ziel)}` });
+      continue;
+    }
+    try {
+      fs.mkdirSync(path.dirname(ziel), { recursive: true });
+      // COPYFILE_EXCL: schlaegt fehl, statt eine vorhandene Datei zu
+      // ueberschreiben — auch wenn sie zwischen Pruefung und Kopie entsteht.
+      fs.copyFileSync(quelle, ziel, fs.constants.COPYFILE_EXCL);
+      kopiert++;
+      send({ type: "log", msg: `[${i + 1}/${ops.length}] ${path.basename(ziel)}` });
+    } catch (err) {
+      fehler++;
+      send({ type: "log", msg: `[${i + 1}/${ops.length}] Fehler: ${err.message}` });
+    }
+  }
+
+  // Der neue Gig-Ordner wird sofort Musik-Quelle, damit er ohne Zutun in der
+  // Bibliothek auftaucht.
+  if (kopiert && !musicSources.includes(basis)) {
+    musicSources.push(basis);
+    saveSources();
+    rebuildIndex();
+    send({ type: "log", msg: "Ordner als Musik-Quelle eingetragen." });
+  }
+
+  send({ type: "done", success: fehler === 0, kopiert, uebersprungen, fehler, wurzel: basis });
+  res.end();
+});
+
 // Dateinamen aus einem Anzeigenamen ableiten und Kollisionen vermeiden.
 function sanitizeCollectionName(n) {
   return (

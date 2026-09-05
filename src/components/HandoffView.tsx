@@ -1,5 +1,6 @@
-import { useMemo } from "react";
-import { DownloadSimple, Warning } from "@phosphor-icons/react";
+import { useMemo, useRef, useState } from "react";
+import { DownloadSimple, FolderPlus, Warning } from "@phosphor-icons/react";
+import { streamNdjson } from "../lib/ndjson";
 import type { Track } from "../lib/nml";
 import { PHASE_COLOR, PHASE_LABEL } from "../lib/tags";
 import { activeSet, getTags, useStore } from "../lib/store/StoreProvider";
@@ -52,9 +53,31 @@ function download(content: string, name: string, mime = "audio/x-mpegurl") {
   URL.revokeObjectURL(url);
 }
 
+interface PlanOp {
+  von: string;
+  nach: string;
+  phase: string;
+  groesse: number;
+  existiert: boolean;
+}
+
+interface Plan {
+  wurzel: string;
+  ops: PlanOp[];
+  probleme: Array<{ grund: string; titel: string }>;
+  zusammenfassung: { gesamt: number; neu: number; vorhanden: number; bytes: number; ordner: string[] };
+}
+
+const mb = (b: number) => `${(b / 1024 / 1024).toFixed(0)} MB`;
+
 export function HandoffView({ tracks }: { tracks: Track[] }) {
   const { state } = useStore();
   const set = activeSet(state);
+  const [ziel, setZiel] = useState("");
+  const [plan, setPlan] = useState<Plan | null>(null);
+  const [log, setLog] = useState<string[]>([]);
+  const [laeuft, setLaeuft] = useState(false);
+  const logRef = useRef<HTMLDivElement>(null);
 
   const items = useMemo(() => {
     const byId = new Map(tracks.map((t) => [t.id, t]));
@@ -68,6 +91,65 @@ export function HandoffView({ tracks }: { tracks: Track[] }) {
   }, [items]);
 
   const safeName = (s: string) => (s || "set").replace(/[^\w\-]+/g, "_");
+
+  // Vorschau holen: der Server rechnet, was passieren wuerde, und fasst nichts
+  // an. Nur was hier steht, darf danach geschrieben werden.
+  const vorschau = async () => {
+    setLog([]);
+    try {
+      const res = await fetch("/api/handoff/plan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          setName: set.name,
+          targetRoot: ziel.trim() || undefined,
+          items: items.map((t) => ({
+            path: t.path,
+            title: t.title,
+            phase: getTags(state, t.id).phase,
+          })),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast(data.error ?? "Vorschau fehlgeschlagen");
+        return;
+      }
+      setPlan(data);
+      setZiel(data.wurzel);
+    } catch {
+      toast("Netzwerkfehler");
+    }
+  };
+
+  const schreiben = async () => {
+    if (!plan) return;
+    setLaeuft(true);
+    setLog([]);
+    try {
+      const r = await streamNdjson(
+        "/api/handoff/apply",
+        { wurzel: plan.wurzel, ops: plan.ops, confirm: true },
+        (evt) => {
+          if (evt.type === "log") {
+            setLog((prev) => [...prev, String(evt.msg)]);
+            requestAnimationFrame(() =>
+              logRef.current?.scrollTo({ top: logRef.current.scrollHeight }),
+            );
+          }
+        },
+      );
+      if (r.error) toast(r.error);
+      else if (r.ok) {
+        toast(`${r.done?.kopiert} Dateien kopiert`);
+        setPlan(null);
+      } else toast(`${r.done?.fehler} Fehler - Log ansehen`);
+    } catch {
+      toast("Netzwerkfehler");
+    } finally {
+      setLaeuft(false);
+    }
+  };
 
   if (!items.length) {
     return (
@@ -192,15 +274,81 @@ export function HandoffView({ tracks }: { tracks: Track[] }) {
         </p>
 
         <div className="mt-1 border-t border-line pt-3">
+          <h3 className="mb-1.5 text-[12px] font-medium text-ink">Ordner schreiben</h3>
+          <p className="mb-2 text-[11px] leading-relaxed text-ink-soft">
+            Legt <code className="text-ink">pre</code> · <code className="text-ink">mid</code> ·{" "}
+            <code className="text-ink">peak</code> · <code className="text-ink">late</code> an und
+            kopiert die Tracks hinein. Es wird kopiert, nichts verschoben und nichts überschrieben.
+          </p>
+          <input
+            value={ziel}
+            onChange={(e) => {
+              setZiel(e.target.value);
+              setPlan(null);
+            }}
+            placeholder="Zielordner (leer = Download-Ordner / Set-Name)"
+            className="mb-2 h-8 w-full rounded-md border border-line bg-base px-2 font-mono text-[11px] text-ink placeholder:text-ink-faint"
+          />
+          <button
+            onClick={vorschau}
+            disabled={laeuft}
+            className="flex h-8 w-full items-center justify-center gap-1.5 rounded-md border border-line text-[12px] text-ink-soft transition-colors hover:text-ink disabled:opacity-50"
+          >
+            <FolderPlus size={13} weight="regular" /> Vorschau
+          </button>
+
+          {plan && (
+            <div className="mt-2 rounded-md border border-line bg-base p-2.5">
+              <div className="font-mono text-[10px] leading-relaxed text-ink-soft">
+                <div className="truncate text-ink">{plan.wurzel}</div>
+                <div>
+                  {plan.zusammenfassung.neu} neu · {plan.zusammenfassung.vorhanden} liegen schon da ·{" "}
+                  {mb(plan.zusammenfassung.bytes)}
+                </div>
+                <div>Ordner: {plan.zusammenfassung.ordner.join(" · ")}</div>
+                {plan.probleme.length > 0 && (
+                  <div className="mt-1" style={{ color: "var(--color-phase-peak)" }}>
+                    {plan.probleme.length} übersprungen: {plan.probleme[0].grund}
+                  </div>
+                )}
+              </div>
+              <button
+                onClick={schreiben}
+                disabled={laeuft || plan.zusammenfassung.neu === 0}
+                className="mt-2 flex h-8 w-full items-center justify-center gap-1.5 rounded-md bg-accent text-[12px] font-medium text-on-accent disabled:opacity-50"
+              >
+                {laeuft
+                  ? "Kopiert …"
+                  : plan.zusammenfassung.neu === 0
+                    ? "Nichts zu tun"
+                    : `${plan.zusammenfassung.neu} Dateien schreiben`}
+              </button>
+            </div>
+          )}
+
+          {log.length > 0 && (
+            <div
+              ref={logRef}
+              className="mt-2 max-h-40 overflow-y-auto rounded-md border border-line bg-base p-2 font-mono text-[10px] leading-relaxed text-ink-faint"
+            >
+              {log.map((l, i) => (
+                <div key={i} className="truncate">
+                  {l}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="mt-1 border-t border-line pt-3">
           <div className="mb-1.5 flex items-center gap-1.5 text-[11px] text-ink-soft">
             <Warning size={13} weight="regular" /> Noch nicht gebaut
           </div>
           <p className="text-[11px] leading-relaxed text-ink-soft">
-            Ordner <code className="text-ink">pre</code> · <code className="text-ink">mid</code> ·{" "}
-            <code className="text-ink">peak</code> · <code className="text-ink">late</code> auf der
-            Platte anlegen und das Beatgrid für die {counts.bestaetigt} bestätigten Tracks
-            mitschreiben — das ist AP-C. Bis dahin analysiert Traktor beim Import alle{" "}
-            {items.length}.
+            Das Beatgrid für die {counts.bestaetigt} bestätigten Tracks mitschreiben, damit Traktor
+            sie nicht neu analysiert. Dafür fehlt noch die Bedeutung von{" "}
+            <code className="text-ink">FLAGS</code> — ohne sie ist nicht gesichert, dass Traktor die
+            Nachanalyse wirklich auslässt.
           </p>
         </div>
       </section>

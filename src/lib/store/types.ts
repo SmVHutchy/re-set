@@ -38,6 +38,11 @@ export interface PersistState {
   sets: DJSet[];
   activeSetId: string | null;
   smartCrates: SmartCrate[];
+  // Beim Sichten aussortiert. Muss den Reload überleben, sonst beginnt der
+  // Fortschritt ("118 von 304") bei jedem Neuladen von vorn — und bei 304
+  // Entscheidungen je Ordner ist genau dieser Zähler das, was die Arbeit
+  // erträglich macht.
+  dismissed: Record<string, true>;
 }
 
 export const EMPTY_TAGS: TrackTags = { energy: null, phase: null, vibe: [] };

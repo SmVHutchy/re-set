@@ -26,6 +26,8 @@ type Action =
   | { type: "batchAddToSet"; ids: string[] }
   | { type: "replaceSetOrder"; ids: string[] }
   | { type: "applyAutoSet"; order: string[]; phases: Record<string, Phase> }
+  | { type: "dismiss"; id: string }
+  | { type: "undismiss"; id: string }
   | { type: "addSmartCrate"; crate: SmartCrate }
   | { type: "deleteSmartCrate"; id: string }
   | { type: "undo" }
@@ -171,6 +173,15 @@ function reducer(state: PersistState, action: Action): PersistState {
         const missing = s.trackIds.filter((id) => !valid.includes(id));
         return { ...s, trackIds: [...valid, ...missing] };
       });
+    }
+    // Aussortieren beim Sichten. Bewusst kein Loeschen: der Track bleibt in
+    // der Bibliothek, er ist nur fuer diesen Ordner abgehakt.
+    case "dismiss":
+      return { ...state, dismissed: { ...state.dismissed, [action.id]: true } };
+    case "undismiss": {
+      const rest = { ...state.dismissed };
+      delete rest[action.id];
+      return { ...state, dismissed: rest };
     }
     case "addSmartCrate":
       return { ...state, smartCrates: [...state.smartCrates, action.crate] };

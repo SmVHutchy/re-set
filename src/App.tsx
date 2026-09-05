@@ -21,10 +21,14 @@ import { UploadNmlButton } from "./components/UploadNmlButton";
 import { LibraryManager } from "./components/LibraryManager";
 import { DownloadPanel } from "./components/DownloadPanel";
 import { SyncView } from "./components/SyncView";
+import { TriageView } from "./components/TriageView";
+import { HandoffView } from "./components/HandoffView";
 import {
   ArrowsClockwise,
   CloudArrowDown,
+  Funnel,
   GridFour,
+  SignOut,
   WaveSine,
   Graph,
   Heartbeat,
@@ -44,7 +48,7 @@ const MiniPlayer = lazy(() =>
 );
 
 type Filter = Phase | "all" | "untagged";
-type View = "download" | "library" | "timeline" | "canvas" | "sync" | "health";
+type View = "download" | "triage" | "timeline" | "handoff" | "library" | "canvas" | "sync" | "health";
 type SortKey = "order" | "folder" | "title" | "artist" | "bpm" | "key" | "energy";
 
 function camelotVal(c: string | null): number {
@@ -199,6 +203,12 @@ export function App() {
         searchRef.current?.focus();
         return;
       }
+      // Beim Sichten gehoert die Tastatur der Station: dort meinen 1–4 und
+      // die Leertaste den Track in der Warteschlange, nicht den in der
+      // Library ausgewaehlten. Ohne diesen Ausstieg feuern beide Handler und
+      // ein Tastendruck faellt zwei Entscheidungen — einmal fuer den
+      // richtigen Track, einmal fuer irgendeinen anderen.
+      if (view === "triage") return;
       if (!selectedId) return;
       if (e.key >= "1" && e.key <= "4") {
         const phase = PHASES[Number(e.key) - 1];
@@ -225,7 +235,7 @@ export function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [dispatch, selectedId, trackById]);
+  }, [dispatch, selectedId, trackById, view]);
 
   const setIds = useMemo(() => new Set(activeSet(state).trackIds), [state.sets, state.activeSetId]);
 
@@ -295,14 +305,24 @@ export function App() {
           </span>
         </h1>
         <div className="flex items-center gap-0.5 rounded-md border border-line p-0.5">
+          {/* Die Kette: ein Gig-Ordner als Werkstück, vier Bearbeitungsschritte.
+              Die Reihenfolge der Reiter ist die Reihenfolge der Arbeit. */}
           <ViewTab active={view === "download"} onClick={() => setView("download")}>
             <CloudArrowDown size={14} weight="regular" /> Laden
           </ViewTab>
-          <ViewTab active={view === "library"} onClick={() => setView("library")}>
-            <GridFour size={14} weight="regular" /> Library
+          <ViewTab active={view === "triage"} onClick={() => setView("triage")}>
+            <Funnel size={14} weight="regular" /> Sichten
           </ViewTab>
           <ViewTab active={view === "timeline"} onClick={() => setView("timeline")}>
-            <WaveSine size={14} weight="regular" /> Timeline
+            <WaveSine size={14} weight="regular" /> Bauen
+          </ViewTab>
+          <ViewTab active={view === "handoff"} onClick={() => setView("handoff")}>
+            <SignOut size={14} weight="regular" /> Übergeben
+          </ViewTab>
+          <span className="mx-1 h-4 w-px bg-line" aria-hidden="true" />
+          {/* Nachschlagewerke — nicht Teil des Ablaufs, aber jederzeit erreichbar. */}
+          <ViewTab active={view === "library"} onClick={() => setView("library")}>
+            <GridFour size={14} weight="regular" /> Library
           </ViewTab>
           <ViewTab active={view === "canvas"} onClick={() => setView("canvas")}>
             <Graph size={14} weight="regular" /> Canvas
@@ -367,6 +387,10 @@ export function App() {
 
       {view === "download" ? (
         <DownloadPanel />
+      ) : view === "triage" ? (
+        <TriageView tracks={tracks} onPreview={onPreview} />
+      ) : view === "handoff" ? (
+        <HandoffView tracks={tracks} />
       ) : view === "library" ? (
         <>
           <nav className="mt-6 flex flex-wrap items-center gap-2">

@@ -1,0 +1,716 @@
+<title>Re:SET Fenster-Layout</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@300..700&family=Geist+Mono:wght@400;500&display=swap">
+
+<style>
+  /* Bewusst einthemig: Wireframes einer dunklen Anwendung, in deren eigenen
+     Tokens aus src/index.css. Alle Farben explizit gesetzt, damit die Seite
+     auf jedem Untergrund haelt. */
+  :root {
+    --base: #14130f;
+    --surface: #1c1a15;
+    --raise: #24211a;
+    --line: #2e2a22;
+    --line-strong: #3c372d;
+    --ink: #f1efea;
+    --ink-soft: #aca69c;
+    --ink-faint: #7c766c;
+    --accent: #ec5e8e;
+    --accent-soft: #3b1f2b;
+    --sig: #45d2d6;
+    --pre: #6e84a6;
+    --mid: #8a77c6;
+    --peak: #ed6a57;
+    --late: #b68f68;
+    --sans: "Geist", system-ui, -apple-system, sans-serif;
+    --mono: "Geist Mono", ui-monospace, "SF Mono", monospace;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--base);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 15px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .page { max-width: 1080px; margin: 0 auto; padding: 56px 28px 96px; }
+
+  header.top { border-bottom: 1px solid var(--line); padding-bottom: 28px; margin-bottom: 44px; }
+  .eyebrow {
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.14em;
+    text-transform: uppercase; color: var(--ink-soft); margin: 0 0 12px;
+  }
+  h1 {
+    font-size: clamp(30px, 4.5vw, 44px); font-weight: 500; line-height: 1.12;
+    letter-spacing: -0.02em; margin: 0 0 14px; text-wrap: balance;
+  }
+  .lede { font-size: 17px; color: var(--ink-soft); max-width: 62ch; margin: 0; }
+
+  h2 { font-size: 23px; font-weight: 500; letter-spacing: -0.01em; margin: 0 0 6px; text-wrap: balance; }
+  h3 { font-size: 16px; font-weight: 500; margin: 0 0 6px; }
+  p { max-width: 68ch; }
+  section { margin-top: 64px; }
+  .sec-head { margin-bottom: 26px; }
+  .sec-head p { color: var(--ink-soft); margin: 0; }
+  .num { font-family: var(--mono); font-size: 11px; color: var(--accent); letter-spacing: 0.1em; display: block; margin-bottom: 8px; }
+
+  /* --- Befunde ----------------------------------------------------------- */
+  .findings { display: flex; flex-direction: column; gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+  .finding { background: var(--surface); padding: 16px 18px; display: grid; grid-template-columns: 96px 1fr; gap: 18px; align-items: baseline; }
+  .finding .fig { font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: 19px; color: var(--ink); text-align: right; line-height: 1.3; }
+  .finding .fig small { display: block; font-size: 10px; color: var(--ink-soft); letter-spacing: 0.06em; text-transform: uppercase; }
+  .finding .txt { font-size: 14px; color: var(--ink-soft); }
+  .finding .txt strong { color: var(--ink); font-weight: 500; }
+
+  .verdict { border-left: 2px solid var(--accent); background: var(--accent-soft); padding: 18px 22px; border-radius: 0 6px 6px 0; margin-top: 26px; }
+  .verdict p { margin: 0; color: var(--ink); font-size: 14.5px; max-width: none; }
+  .verdict p + p { margin-top: 11px; }
+  .verdict .head { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent); margin-bottom: 9px; }
+
+  /* --- Zustandstabelle ---------------------------------------------------- */
+  table.data { width: 100%; border-collapse: collapse; font-size: 14px; }
+  table.data th, table.data td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  table.data th { font-family: var(--mono); font-size: 10px; letter-spacing: 0.09em; text-transform: uppercase; color: var(--ink-soft); font-weight: 400; }
+  table.data td { color: var(--ink-soft); }
+  table.data td:first-child { color: var(--ink); }
+  table.data td.mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  .scroller { overflow-x: auto; }
+
+  /* --- Wireframes --------------------------------------------------------- */
+  .variant { margin-top: 46px; }
+  .variant-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 4px; }
+  .variant-head .tagref { font-family: var(--mono); font-size: 11px; color: var(--accent); letter-spacing: 0.1em; }
+  .variant > p { color: var(--ink-soft); font-size: 14.5px; margin: 6px 0 18px; }
+
+  .wf { border: 1px solid var(--line-strong); border-radius: 8px; overflow: hidden; background: var(--base); font-family: var(--mono); font-size: 10px; color: var(--ink-soft); user-select: none; }
+  .wf + .wf { margin-top: 12px; }
+  .wf-bar { display: flex; align-items: center; gap: 8px; padding: 7px 10px; background: var(--raise); border-bottom: 1px solid var(--line); font-size: 10px; color: var(--ink-soft); flex-wrap: wrap; }
+  .wf-bar .brand { color: var(--accent); font-weight: 500; letter-spacing: 0.04em; }
+  .wf-bar .ws { display: flex; gap: 2px; }
+  .wf-bar .ws span { padding: 2px 7px; border-radius: 3px; border: 1px solid transparent; }
+  .wf-bar .ws span.on { background: var(--surface); border-color: var(--line-strong); color: var(--ink); }
+  .wf-bar .grow { flex: 1; }
+  .wf-bar .chip { padding: 2px 6px; border: 1px solid var(--line-strong); border-radius: 3px; }
+  .wf-bar .chip.live { border-color: var(--sig); color: var(--sig); }
+  .wf-bar .chip.ready { border-color: var(--accent); color: var(--accent); }
+
+  .wf-body { display: grid; min-height: 290px; }
+  .wf-p { border: 1px solid var(--line); margin: -0.5px; padding: 8px 10px; background: var(--surface); display: flex; flex-direction: column; gap: 5px; min-width: 0; overflow: hidden; }
+  .wf-p .ttl { color: var(--ink); font-size: 10px; letter-spacing: 0.03em; }
+  .wf-p .ttl em { font-style: normal; color: var(--ink-soft); }
+  .wf-p .hint { color: var(--ink-soft); font-size: 9.5px; line-height: 1.5; }
+  .wf-p.stage { background: var(--base); }
+  .wf-p.accent { border-color: var(--accent); }
+  .wf-p.accent .ttl { color: var(--accent); }
+
+  .rows { display: flex; flex-direction: column; gap: 3px; }
+  .row { height: 8px; background: var(--raise); border-radius: 2px; }
+  .row.w70 { width: 70%; } .row.w50 { width: 50%; } .row.w85 { width: 85%; }
+  .row.on { background: var(--line-strong); }
+
+  .grid-covers { display: grid; grid-template-columns: repeat(auto-fill, minmax(38px, 1fr)); gap: 4px; }
+  .cv { aspect-ratio: 1; background: var(--raise); border-radius: 2px; position: relative; }
+  .cv.sel { outline: 1px solid var(--accent); }
+  .cv i { position: absolute; right: 2px; bottom: 1px; font-style: normal; font-size: 7px; color: var(--ink-soft); }
+
+  .curve { flex: 1; display: flex; align-items: flex-end; gap: 3px; min-height: 44px; }
+  .curve b { flex: 1; border-radius: 1px 1px 0 0; display: block; }
+
+  .bins { display: flex; gap: 5px; flex: 1; }
+  .bin { flex: 1; border: 1px dashed var(--line-strong); border-radius: 3px; padding: 5px; display: flex; flex-direction: column; gap: 3px; }
+  .bin .lbl { font-size: 9px; letter-spacing: 0.06em; }
+  .bin.pre { border-color: var(--pre); } .bin.pre .lbl { color: var(--pre); }
+  .bin.mid { border-color: var(--mid); } .bin.mid .lbl { color: var(--mid); }
+  .bin.peak { border-color: var(--peak); } .bin.peak .lbl { color: var(--peak); }
+  .bin.late { border-color: var(--late); } .bin.late .lbl { color: var(--late); }
+
+  .state-list { display: flex; flex-direction: column; gap: 4px; }
+  .state { display: flex; align-items: center; gap: 6px; font-size: 9.5px; }
+  .state .dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+  .state .nm { flex: 1; color: var(--ink-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dot.ok { background: var(--sig); } .dot.est { background: var(--late); } .dot.open { background: var(--line-strong); }
+
+  .wf-foot { display: flex; align-items: center; gap: 10px; padding: 6px 10px; background: var(--raise); border-top: 1px solid var(--line); font-size: 10px; }
+  .wf-foot .wave { flex: 1; height: 12px; background: repeating-linear-gradient(90deg, var(--line-strong) 0 2px, transparent 2px 4px); border-radius: 2px; }
+
+  .cost { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 16px; }
+  @media (max-width: 720px) { .cost { grid-template-columns: 1fr; } .wf-body { min-height: 0; } }
+  .cost div h4 { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; margin: 0 0 6px; }
+  .cost ul { margin: 0; padding-left: 17px; color: var(--ink-soft); font-size: 14px; }
+  .cost li { margin-bottom: 4px; }
+  .cost .good h4 { color: var(--sig); }
+  .cost .bad h4 { color: var(--peak); }
+
+  .rejected { border: 1px solid var(--line); border-radius: 6px; padding: 18px 20px; margin-top: 30px; background: var(--surface); }
+  .rejected h3 { color: var(--ink-soft); }
+  .rejected p { margin: 0; font-size: 14px; color: var(--ink-soft); }
+
+  .stations { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  @media (max-width: 860px) { .stations { grid-template-columns: 1fr 1fr; } }
+  .station { border: 1px solid var(--line); border-radius: 6px; padding: 15px 16px; background: var(--surface); display: flex; flex-direction: column; gap: 7px; }
+  .station.final { border-color: var(--accent); }
+  .station .st-n { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; color: var(--ink-soft); }
+  .station.final .st-n { color: var(--accent); }
+  .station .st-t { font-size: 14.5px; color: var(--ink); }
+  .station .st-d { font-size: 13px; color: var(--ink-soft); line-height: 1.5; }
+
+  pre.prompt { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 20px; overflow-x: auto; font-family: var(--mono); font-size: 12px; line-height: 1.65; color: var(--ink-soft); white-space: pre-wrap; }
+  pre.prompt strong { color: var(--ink); font-weight: 500; }
+
+  footer.end { margin-top: 72px; padding-top: 22px; border-top: 1px solid var(--line); color: var(--ink-soft); font-size: 13px; }
+  a { color: var(--accent); }
+  code { font-family: var(--mono); font-size: 0.9em; color: var(--ink); }
+</style>
+
+<div class="page">
+
+<header class="top">
+  <p class="eyebrow">Re:SET · Layout-Entwurf, zweite Fassung · 5. September 2026</p>
+  <h1>Von 304 geladenen Dateien zu 40 spielbaren Tracks</h1>
+  <p class="lede">
+    Drei Layouts für die Strecke, die wirklich Zeit kostet — und der Befund aus 4738 Dateien,
+    90 Ordnern und 4701 Traktor-Einträgen, der entscheidet, welches taugt.
+  </p>
+</header>
+
+<section>
+  <div class="sec-head">
+    <span class="num">01 — Befund</span>
+    <h2>Was die Daten über den Arbeitsablauf sagen</h2>
+    <p>Bevor Panels verschoben werden, muss klar sein, was in ihnen passiert. Das steht in der Sammlung selbst.</p>
+  </div>
+
+  <div class="findings">
+    <div class="finding">
+      <div class="fig">304<small>casa 2.0</small></div>
+      <div class="txt">
+        <strong>Ein Set beginnt als Massen-Download.</strong> Der Gig-Ordner <code>casa 2.0</code> enthält
+        304 Dateien, <code>Junglist du hs</code> 91 — heruntergeladene Playlists, keine handverlesenen
+        Sets. Die Arbeit besteht darin, daraus rund 40 zu machen.
+      </div>
+    </div>
+    <div class="finding">
+      <div class="fig">90<small>Ordner</small></div>
+      <div class="txt">
+        <strong>Die Ordnung liegt im Dateisystem.</strong> Genre-Crates
+        (<code>Summer garage</code> 473, <code>Minimal House</code> 304, <code>Reggae master</code> 270),
+        Gig-Ordner — und darin Unterordner <code>pre</code>, <code>mid</code>, <code>peak</code>,
+        <code>late</code>. Die Phase steht im Pfad, nicht in einer Datenbank.
+      </div>
+    </div>
+    <div class="finding">
+      <div class="fig">339<small>Mehrfach</small></div>
+      <div class="txt">
+        <strong>Sets entstehen durch Kopieren.</strong> 339 Dateien liegen in zwei bis fünf Ordnern
+        gleichzeitig. <code>casa 2.0</code> existiert sogar zweimal als Ordner — einmal unter
+        <code>Spotify/</code>, einmal unter <code>smvhutchy_sets/</code>. Ein Track hat keinen Ort,
+        er hat mehrere.
+      </div>
+    </div>
+    <div class="finding">
+      <div class="fig">4113<small>roh</small></div>
+      <div class="txt">
+        <strong>Der Großteil ist unanalysiert.</strong> Von 4701 Einträgen haben 588 ein Beatgrid,
+        4113 keins. Jeder rohe Track kostet Traktor-Analysezeit in dem Moment, in dem er gebraucht wird.
+      </div>
+    </div>
+    <div class="finding">
+      <div class="fig">10<small>Playlists</small></div>
+      <div class="txt">
+        <strong>Traktors Playlist-Baum ist leer.</strong> Zehn Playlists, davon vier leer und drei
+        namens <code>HOUSE</code>, <code>HOUSE (1)</code>, <code>HOUSE (3)</code> — Reste doppelter
+        Importe. Die einzige echte ist <code>MAIN</code> mit 482 Tracks.
+      </div>
+    </div>
+    <div class="finding">
+      <div class="fig">0<small>getaggt</small></div>
+      <div class="txt">
+        <strong>Re:SETs Tagging wird nicht benutzt.</strong> 482 geladene Tracks, kein einziger
+        getaggt. Nicht aus Faulheit — die Phase steht bereits im Ordnernamen.
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="sec-head">
+    <span class="num">02 — Engpass</span>
+    <h2>Der Zeitfresser ist nicht die Genauigkeit, sondern die Menge</h2>
+    <p>Die naheliegende Diagnose lautet: unsere Analyse ist zu ungenau, um Traktor die Arbeit abzunehmen. Sie ist falsch.</p>
+  </div>
+
+  <p>
+    In der Collection ist „analysiert“ ein Bündel, das immer geschlossen auftritt. Kein einziger
+    Mischfall unter 4701 Einträgen:
+  </p>
+
+  <div class="scroller">
+    <table class="data">
+      <tr><th>Merkmal</th><th>analysiert (588)</th><th>roh (4113)</th></tr>
+      <tr><td>FLAGS</td><td class="mono">12 · 8 · 28</td><td class="mono">fehlt bei allen</td></tr>
+      <tr><td>TEMPO</td><td class="mono">vorhanden</td><td class="mono">fehlt</td></tr>
+      <tr><td>BPM_QUALITY</td><td class="mono">100 bei allen 588</td><td class="mono">fehlt</td></tr>
+      <tr><td>MUSICAL_KEY</td><td class="mono">vorhanden</td><td class="mono">fehlt</td></tr>
+      <tr><td>LOUDNESS</td><td class="mono">vorhanden</td><td class="mono">fehlt</td></tr>
+      <tr><td>Grid-Cue (TYPE=4)</td><td class="mono">vorhanden</td><td class="mono">fehlt</td></tr>
+    </table>
+  </div>
+
+  <div class="verdict">
+    <p class="head">Die Annahme, die kippt</p>
+    <p><strong>Der Analysezustand hängt am Dateipfad, nicht am Track.</strong> Und der Workflow
+    kopiert: 339 Dateien liegen mehrfach, 2212 in Gig-Ordnern. Jede Kopie ist für Traktor ein neuer,
+    unanalysierter Track — dieselbe Musik, wieder von vorn. Deshalb fühlt es sich wiederkehrend an:
+    es <em>ist</em> wiederkehrend, erzeugt durch die Ordnerstruktur selbst.</p>
+    <p>Damit ist es kein Genauigkeitsproblem. Die Analyse trifft BPM zu 55 % exakt — das ist zu wenig
+    für ein Beatgrid, aber <strong>völlig ausreichend zum Einsortieren nach Phase</strong>. Der Fehler
+    liegt darin, einen Wert für alles zu verlangen.</p>
+    <p><strong>Die Konsequenz für die Oberfläche:</strong> Sie muss pro Track drei Zustände zeigen —
+    <em>bestätigt</em>, <em>geschätzt</em>, <em>Traktor rechnet</em> — statt so zu tun, als gäbe es
+    nur „hat Werte“ und „hat keine“. Das ist keine Fußnote, das ist eine eigene Station.</p>
+  </div>
+</section>
+
+<section>
+  <div class="sec-head">
+    <span class="num">03 — Konsequenz</span>
+    <h2>Was daraus für das Layout folgt</h2>
+  </div>
+  <div class="scroller">
+    <table class="data">
+      <tr><th>Befund</th><th>Forderung</th></tr>
+      <tr>
+        <td>Ein Ordner mit 304 Dateien ist die Arbeitseinheit</td>
+        <td>Der Ordner ist das Hauptobjekt, nicht die 4738 Tracks der Gesamtbibliothek. Quelle und Ziel müssen gleichzeitig sichtbar sein.</td>
+      </tr>
+      <tr>
+        <td>Dieselbe Entscheidung 304-mal</td>
+        <td>Die Schleife Vorhören → Urteil → nächster Track läuft ohne Maus. Jeder Klick kostet hier dreihundertfach.</td>
+      </tr>
+      <tr>
+        <td>Ein Track liegt in mehreren Ordnern, ein Gig sogar in zwei Quellbäumen</td>
+        <td>Ordner sind Etiketten, keine Schubladen. Der Inspector zeigt alle Orte eines Tracks und warnt, wenn er im Ziel schon liegt.</td>
+      </tr>
+      <tr>
+        <td>Drei Analysezustände statt zwei</td>
+        <td>Eine eigene Station „Bereit für Traktor“, die je Track sagt: bestätigt · geschätzt · Traktor rechnet nach. Sie beantwortet die Frage, um die es eigentlich geht.</td>
+      </tr>
+      <tr>
+        <td>Ein Bildschirm</td>
+        <td>Kein Bedarf für abtrennbare, frei schwebende Fenster. Die Freiheit gehört in den Wechsel zwischen Stationen, nicht ins Ziehen einzelner Panels.</td>
+      </tr>
+      <tr>
+        <td>Downloads und Analyse laufen Minuten bis Stunden</td>
+        <td>Laufende Aufträge stehen dauerhaft in der oberen Leiste, nicht in einer Ansicht, die man verlässt.</td>
+      </tr>
+    </table>
+  </div>
+</section>
+
+<section>
+  <div class="sec-head">
+    <span class="num">04 — Obere Leiste</span>
+    <h2>Was oben steht</h2>
+    <p>Eine Zeile. Links wo du bist, rechts wie es steht. Alles darin ist entweder ständig nötig oder ständig relevant.</p>
+  </div>
+
+  <div class="wf">
+    <div class="wf-bar">
+      <span class="brand">Re:SET</span>
+      <span class="ws"><span>Laden</span><span class="on">Sichten</span><span>Bauen</span><span>Übergeben</span></span>
+      <span class="grow"></span>
+      <span class="chip">Summer garage · 473</span>
+      <span class="chip">casa 2.0 · 38 · 2:41 h</span>
+      <span class="chip ready">26 bereit</span>
+      <span class="chip live">2 Aufträge</span>
+      <span class="chip">⌘K</span>
+    </div>
+  </div>
+
+  <div class="cost">
+    <div class="good">
+      <h4>Bewusst oben</h4>
+      <ul>
+        <li><strong>Set-Dauer live</strong> — 2:41 h gegen ein Ziel, sonst zählt man Tracks statt Zeit</li>
+        <li><strong>„26 bereit“</strong> — wie viele des Sets Traktor ohne Nachrechnen spielt. Die Zahl, die den ganzen Ablauf misst</li>
+        <li><strong>Auftragszähler</strong> — Download und Analyse laufen stundenlang weiter</li>
+        <li><strong>Befehlspalette</strong> — jede Aktion erreichbar, ohne ihr Panel zu suchen</li>
+      </ul>
+    </div>
+    <div class="bad">
+      <h4>Bewusst nicht oben</h4>
+      <ul>
+        <li><strong>Rückgängig/Wiederholen</strong> — Tastenkürzel, keine Fläche</li>
+        <li><strong>Import- und Ordner-Knöpfe</strong> — gehören in die Station, in der sie Sinn ergeben</li>
+        <li><strong>Suchfeld</strong> — beim Sichten sucht man nicht, man geht durch</li>
+        <li><strong>Logo-Bühne</strong> — die Mitte bleibt leer, damit die rechte Zone lesbar bleibt</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="sec-head">
+    <span class="num">05 — Varianten</span>
+    <h2>Drei Layouts</h2>
+    <p>Alle drei mit derselben oberen Leiste. Sie unterscheiden sich darin, wie viel Freiheit sie geben — und was diese Freiheit kostet.</p>
+  </div>
+
+  <!-- B -->
+  <div class="variant">
+    <div class="variant-head"><h3>B — Schiene und Dock</h3><span class="tagref">VS Code / Lightroom</span></div>
+    <p>Feste Zonen, verschiebbare Trennlinien. Panels wechseln innerhalb ihrer Zone, nicht quer durchs Fenster.</p>
+    <div class="wf">
+      <div class="wf-bar">
+        <span class="brand">Re:SET</span>
+        <span class="ws"><span>Laden</span><span class="on">Sichten</span><span>Bauen</span><span>Übergeben</span></span>
+        <span class="grow"></span><span class="chip">casa 2.0 · 38 · 2:41 h</span><span class="chip live">2 Aufträge</span>
+      </div>
+      <div class="wf-body" style="grid-template-columns: 34px 168px 1fr 176px">
+        <div class="wf-p" style="align-items:center;gap:9px;padding:8px 4px">
+          <div class="row" style="width:16px;height:16px;background:var(--accent);border-radius:3px"></div>
+          <div class="row" style="width:16px;height:16px;border-radius:3px"></div>
+          <div class="row" style="width:16px;height:16px;border-radius:3px"></div>
+          <div class="row" style="width:16px;height:16px;border-radius:3px"></div>
+        </div>
+        <div class="wf-p">
+          <span class="ttl">Ordner</span>
+          <div class="rows"><div class="row w85 on"></div><div class="row w70"></div><div class="row w50"></div><div class="row w70"></div></div>
+          <span class="ttl" style="margin-top:4px">Gig-Ordner</span>
+          <div class="rows"><div class="row w85"></div><div class="row w50"></div></div>
+        </div>
+        <div class="wf-p stage">
+          <span class="ttl">Cover-Wall <em>· Summer garage · 473</em></span>
+          <div class="grid-covers">
+            <div class="cv sel"><i>9A</i></div><div class="cv"><i>8B</i></div><div class="cv"><i>5A</i></div><div class="cv"><i>11A</i></div>
+            <div class="cv"><i>2B</i></div><div class="cv"><i>9A</i></div><div class="cv"><i>7A</i></div><div class="cv"><i>4B</i></div>
+            <div class="cv"><i>12A</i></div><div class="cv"><i>6A</i></div><div class="cv"><i>1B</i></div><div class="cv"><i>10A</i></div>
+          </div>
+        </div>
+        <div class="wf-p">
+          <span class="ttl">Inspector</span>
+          <div class="rows"><div class="row w85"></div><div class="row w50"></div><div class="row w70"></div></div>
+          <span class="ttl" style="margin-top:6px">Liegt in <em>· 3 Ordnern</em></span>
+          <div class="rows"><div class="row w70"></div><div class="row w85"></div><div class="row w50"></div></div>
+        </div>
+      </div>
+      <div class="wf-foot"><span>9A · 128 BPM</span><span class="wave"></span><span>casa 2.0 · 38 · 2:41 h</span></div>
+    </div>
+    <div class="cost">
+      <div class="good"><h4>Dafür</h4><ul>
+        <li>Zonen vorgegeben, Größen frei — Adobes eigener Befund: begrenzte Wahl schlägt völlige Freiheit</li>
+        <li>Kein Layout kann kaputtgehen</li>
+        <li>Geringer Bauaufwand, nutzt alle bestehenden Ansichten</li>
+      </ul></div>
+      <div class="bad"><h4>Dagegen</h4><ul>
+        <li>Quelle und Ziel teilen sich eine Bühne — beim Ausdünnen unbequem</li>
+        <li>Bildet keinen Ablauf ab, nur einen Werkzeugkasten</li>
+      </ul></div>
+    </div>
+  </div>
+
+  <!-- C -->
+  <div class="variant">
+    <div class="variant-head"><h3>C — Sichtungs-Cockpit</h3><span class="tagref">nur für die eine Schleife</span></div>
+    <p>Kein allgemeines Panel-System: eine Oberfläche für die Entscheidung, die 304 Mal fällt. Warteschlange links, Urteil rechts, Tastatur überall.</p>
+    <div class="wf">
+      <div class="wf-bar">
+        <span class="brand">Re:SET</span>
+        <span class="ws"><span>Laden</span><span class="on">Sichten</span><span>Bauen</span><span>Übergeben</span></span>
+        <span class="grow"></span><span class="chip">casa 2.0 · 304 · 118 gesichtet</span><span class="chip live">2 Aufträge</span>
+      </div>
+      <div class="wf-body" style="grid-template-columns: 200px 1fr 250px">
+        <div class="wf-p">
+          <span class="ttl">Warteschlange <em>· 186 offen</em></span>
+          <div class="rows">
+            <div class="row w85 on"></div><div class="row w70"></div><div class="row w85"></div>
+            <div class="row w50"></div><div class="row w70"></div><div class="row w85"></div>
+            <div class="row w50"></div><div class="row w70"></div>
+          </div>
+        </div>
+        <div class="wf-p stage" style="align-items:center;justify-content:center;gap:10px">
+          <div class="cv sel" style="width:96px;height:96px"><i>9A</i></div>
+          <span class="ttl">Azaad — bubblin' (extended mix)</span>
+          <span class="hint">9A · 128,0 BPM · Tonart geschätzt</span>
+          <div style="width:80%;height:16px;background:repeating-linear-gradient(90deg,var(--line-strong) 0 2px,transparent 2px 4px);border-radius:2px"></div>
+          <span class="hint">Leertaste hören · 1–4 Phase · X raus · → weiter</span>
+        </div>
+        <div class="wf-p">
+          <span class="ttl">casa 2.0</span>
+          <div class="bins">
+            <div class="bin pre"><span class="lbl">pre 9</span><div class="row"></div><div class="row w70"></div></div>
+            <div class="bin mid"><span class="lbl">mid 14</span><div class="row"></div><div class="row w85"></div><div class="row w50"></div></div>
+            <div class="bin peak"><span class="lbl">peak 11</span><div class="row"></div><div class="row w70"></div></div>
+            <div class="bin late"><span class="lbl">late 4</span><div class="row w50"></div></div>
+          </div>
+        </div>
+      </div>
+      <div class="wf-foot"><span>118 / 304 gesichtet</span><span class="wave"></span><span>Ziel 3:00 h — fehlen 19 min</span></div>
+    </div>
+    <div class="cost">
+      <div class="good"><h4>Dafür</h4><ul>
+        <li>Bedient genau den Schritt, der die Zeit frisst</li>
+        <li>Fortschritt sichtbar: 118 von 304 — bei dreihundert Entscheidungen entscheidend</li>
+        <li>Die Phasen-Behälter entsprechen den Ordnern, die ohnehin entstehen</li>
+      </ul></div>
+      <div class="bad"><h4>Dagegen</h4><ul>
+        <li>Nichts verschiebbar — das Gegenteil des Gewünschten</li>
+        <li>Deckt nur eine von vier Stationen ab</li>
+      </ul></div>
+    </div>
+  </div>
+
+  <!-- D -->
+  <div class="variant">
+    <div class="variant-head"><h3>D — Die Kette</h3><span class="tagref">Empfehlung</span></div>
+    <p>B als Gerüst, C als eine seiner Stationen. Vier Stationen eines Ablaufs statt vier Ansichten eines Werkzeugkastens — der Gig-Ordner ist das Werkstück, das durchgereicht wird. Unten beide Zustände: <strong>Sichten</strong> und <strong>Übergeben</strong>.</p>
+
+    <div class="wf">
+      <div class="wf-bar">
+        <span class="brand">Re:SET</span>
+        <span class="ws"><span>Laden</span><span class="on">Sichten</span><span>Bauen</span><span>Übergeben</span></span>
+        <span class="grow"></span><span class="chip">casa 2.0 · 304 · 118 gesichtet</span><span class="chip ready">26 bereit</span><span class="chip">⌘K</span>
+      </div>
+      <div class="wf-body" style="grid-template-columns: 34px 200px 1fr 240px">
+        <div class="wf-p" style="align-items:center;gap:9px;padding:8px 4px">
+          <div class="row" style="width:16px;height:16px;border-radius:3px"></div>
+          <div class="row" style="width:16px;height:16px;background:var(--accent);border-radius:3px"></div>
+          <div class="row" style="width:16px;height:16px;border-radius:3px"></div>
+          <div class="row" style="width:16px;height:16px;border-radius:3px"></div>
+        </div>
+        <div class="wf-p">
+          <span class="ttl">Warteschlange <em>· 186 offen</em></span>
+          <div class="rows">
+            <div class="row w85 on"></div><div class="row w70"></div><div class="row w85"></div>
+            <div class="row w50"></div><div class="row w70"></div><div class="row w85"></div>
+          </div>
+        </div>
+        <div class="wf-p stage" style="align-items:center;justify-content:center;gap:10px">
+          <div class="cv sel" style="width:88px;height:88px"><i>9A</i></div>
+          <span class="ttl">Azaad — bubblin' (extended mix)</span>
+          <span class="hint">Leertaste hören · 1–4 Phase · X raus · → weiter</span>
+        </div>
+        <div class="wf-p">
+          <span class="ttl">casa 2.0 <em>· 38</em></span>
+          <div class="bins">
+            <div class="bin pre"><span class="lbl">pre 9</span><div class="row"></div></div>
+            <div class="bin mid"><span class="lbl">mid 14</span><div class="row"></div><div class="row w70"></div></div>
+            <div class="bin peak"><span class="lbl">peak 11</span><div class="row"></div></div>
+            <div class="bin late"><span class="lbl">late 4</span><div class="row w50"></div></div>
+          </div>
+        </div>
+      </div>
+      <div class="wf-foot"><span>118 / 304 gesichtet</span><span class="wave"></span><span>2:41 h von 3:00 h</span></div>
+    </div>
+
+    <div class="wf">
+      <div class="wf-bar">
+        <span class="brand">Re:SET</span>
+        <span class="ws"><span>Laden</span><span>Sichten</span><span>Bauen</span><span class="on">Übergeben</span></span>
+        <span class="grow"></span><span class="chip">casa 2.0 · 38 · 2:41 h</span><span class="chip ready">26 von 38 bereit</span>
+      </div>
+      <div class="wf-body" style="grid-template-columns: 34px 1fr 290px; min-height:230px">
+        <div class="wf-p" style="align-items:center;gap:9px;padding:8px 4px">
+          <div class="row" style="width:16px;height:16px;border-radius:3px"></div>
+          <div class="row" style="width:16px;height:16px;border-radius:3px"></div>
+          <div class="row" style="width:16px;height:16px;border-radius:3px"></div>
+          <div class="row" style="width:16px;height:16px;background:var(--accent);border-radius:3px"></div>
+        </div>
+        <div class="wf-p accent">
+          <span class="ttl">Bereit für Traktor <em>· 26 von 38</em></span>
+          <div class="state-list">
+            <div class="state"><span class="dot ok"></span><span class="nm">Azaad — bubblin' (extended mix)</span><span>128,0 · 9A · bestätigt</span></div>
+            <div class="state"><span class="dot ok"></span><span class="nm">Butschi — spotlight 2000</span><span>142,0 · 4A · bestätigt</span></div>
+            <div class="state"><span class="dot est"></span><span class="nm">Feta Felice — bring the baseline</span><span>145,9 · 8A · geschätzt</span></div>
+            <div class="state"><span class="dot open"></span><span class="nm">Lloyd Robinson — Cuss Cuss</span><span>Traktor rechnet nach</span></div>
+            <div class="state"><span class="dot ok"></span><span class="nm">Milo Passier — You Should Be Dancing</span><span>130,0 · 6A · bestätigt</span></div>
+            <div class="state"><span class="dot est"></span><span class="nm">MRD — Whiteflower</span><span>146,0 · 3A · geschätzt</span></div>
+          </div>
+          <span class="hint" style="margin-top:4px">Nur bestätigte Werte bekommen ein Beatgrid. Geschätzte gehen ohne Grid mit — Traktor rechnet genau diese nach, statt alle 38.</span>
+        </div>
+        <div class="wf-p">
+          <span class="ttl">Übergabe</span>
+          <div class="rows"><div class="row w85"></div><div class="row w70"></div></div>
+          <span class="hint">Ordner <code>pre</code> · <code>mid</code> · <code>peak</code> · <code>late</code> schreiben</span>
+          <span class="hint">NML-Playlist mit Grid für 26 Tracks</span>
+          <span class="hint">Sicherung vor dem Schreiben · Vorschau des Diffs</span>
+        </div>
+      </div>
+      <div class="wf-foot"><span>12 Tracks brauchen Traktor</span><span class="wave"></span><span>statt 38</span></div>
+    </div>
+
+    <div class="cost">
+      <div class="good"><h4>Dafür</h4><ul>
+        <li>Bildet den Ablauf ab, nicht die Werkzeuge — jede Station hat ein klares Ende</li>
+        <li>Station 4 beantwortet die eigentliche Frage: kann ich das jetzt spielen?</li>
+        <li>Panels innerhalb der Zonen verschiebbar, kein Layout kann sich selbst zerstören</li>
+        <li>Baut auf allem, was schon steht</li>
+      </ul></div>
+      <div class="bad"><h4>Dagegen</h4><ul>
+        <li>Keine frei schwebenden Fenster — bei einem Bildschirm allerdings kein Verlust</li>
+        <li>Jede Station muss durchdacht werden, statt „mach dir's selbst“</li>
+        <li>Station 4 setzt AP-C voraus (Write-Back mit Sicherung und Vorschau)</li>
+      </ul></div>
+    </div>
+  </div>
+
+  <div class="rejected">
+    <h3>Abgewogen und verworfen: das freie Adobe-Dock</h3>
+    <p>
+      Panels frei greifen, andocken, abtrennen — wie in Premiere oder After Effects. Der einzige
+      Vorteil, den es gegenüber B und D hat, ist das Abtrennen einzelner Panels auf einen zweiten
+      Monitor. Bei einem Bildschirm bleibt davon nichts, während der Bauaufwand der mit Abstand
+      höchste wäre: Drop-Zonen, Layoutzustand, Versionierung, Zurücksetzen. Adobe selbst argumentiert
+      in seiner Design-Doku für <em>teilweise</em> Anpassbarkeit — Auswahl geben, ohne in ein Meer von
+      Möglichkeiten zu werfen. Sollte später ein zweiter Monitor dazukommen, ist
+      <a href="https://dockview.dev/">dockview</a> der Weg, nicht Eigenbau.
+    </p>
+  </div>
+</section>
+
+<section>
+  <div class="sec-head">
+    <span class="num">06 — Kette</span>
+    <h2>Die vier Stationen</h2>
+    <p>Ein Werkstück, vier Bearbeitungsschritte. Jede Station hat einen Zustand, den sie herstellt.</p>
+  </div>
+  <div class="stations">
+    <div class="station">
+      <span class="st-n">01</span>
+      <span class="st-t">Laden</span>
+      <span class="st-d">Link rein, Playlist-Name wird Ordnername. Analyse läuft direkt hinterher, nicht als eigener Schritt.</span>
+      <span class="st-d" style="color:var(--ink-faint)">Ergebnis: Ordner mit 304 Dateien</span>
+    </div>
+    <div class="station">
+      <span class="st-n">02</span>
+      <span class="st-t">Sichten</span>
+      <span class="st-d">Vorhören, Phase drücken oder rauswerfen. Dreihundert Mal dieselbe Schleife, ohne die Hand von der Tastatur.</span>
+      <span class="st-d" style="color:var(--ink-faint)">Ergebnis: 38 Tracks in vier Phasen</span>
+    </div>
+    <div class="station">
+      <span class="st-n">03</span>
+      <span class="st-t">Bauen</span>
+      <span class="st-d">Reihenfolge innerhalb der Phasen, Energiekurve, harmonische Übergänge. Auto-Vorschlag als Startpunkt.</span>
+      <span class="st-d" style="color:var(--ink-faint)">Ergebnis: 2:41 h in Reihenfolge</span>
+    </div>
+    <div class="station final">
+      <span class="st-n">04</span>
+      <span class="st-t">Übergeben</span>
+      <span class="st-d">Ordner schreiben, NML mit Grid für die bestätigten Tracks. Zeigt, wie viele Traktor noch nachrechnen muss.</span>
+      <span class="st-d" style="color:var(--ink-faint)">Ergebnis: 26 von 38 sofort spielbar</span>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="sec-head">
+    <span class="num">07 — Recherche</span>
+    <h2>Worauf zu achten ist</h2>
+  </div>
+  <div class="scroller">
+    <table class="data">
+      <tr><th>Punkt</th><th>Warum</th></tr>
+      <tr><td>Teilweise Anpassbarkeit schlägt volle</td><td>Adobes eigene Begründung zur Premiere-Elements-Überarbeitung: Panels dürfen angedockt werden, aber nur an bestimmten Stellen — Auswahl geben, ohne in ein Meer von Möglichkeiten zu werfen.</td></tr>
+      <tr><td>Drop-Zonen müssen leuchten, bevor losgelassen wird</td><td>Beim Ziehen entscheidet die gewählte Zone, ob ein Panel andockt oder gruppiert. Ohne Vorschau ist das Raten.</td></tr>
+      <tr><td>Arbeitsbereiche zurücksetzbar machen</td><td>Wer Panels verschieben kann, verschiebt sie irgendwann kaputt. „Auf Standard zurücksetzen“ ist Pflicht, nicht Komfort.</td></tr>
+      <tr><td>Layout-Zustand versionieren</td><td>Gespeicherte Layouts überleben Programmversionen nur, wenn das Format eine Version trägt. Sonst startet die App eines Tages in einem Zustand, den sie nicht mehr liest.</td></tr>
+      <tr><td>Virtualisierung vor Freiheit</td><td>473 Cover in einem Panel scrollen heute schon zäh. Ein verschiebbares Panel, das ruckelt, ist schlechter als ein festes, das flüssig läuft.</td></tr>
+      <tr><td>Tastatur bleibt der schnellste Weg</td><td>Bei 304 Entscheidungen je Ordner schlägt jedes Kürzel jedes Panel. Die Befehlspalette ist wichtiger als die Verschiebbarkeit.</td></tr>
+      <tr><td>Fertige Bibliothek, falls doch gezogen wird</td><td><a href="https://dockview.dev/">dockview</a> (zero dependency, Tabs, Gruppen, schwebende Panels) oder <a href="https://github.com/caplin/FlexLayout">flexlayout-react</a> (JSON-Layoutzustand). Ein Dock selbst zu schreiben kostet Wochen.</td></tr>
+    </table>
+  </div>
+</section>
+
+<section>
+  <div class="sec-head">
+    <span class="num">08 — Auftrag</span>
+    <h2>Hyper-Prompt</h2>
+    <p>Für Variante D. Kontext-Block aus <code>docs/HYPERPROMPT.md</code> §1 und §2 voranstellen.</p>
+  </div>
+<pre class="prompt"><strong>AUFTRAG — AP-F: Die Kette</strong>
+
+GEMESSENER KONTEXT, DER DEN ENTWURF BESTIMMT (Belege: docs/wireframes.html
+§1 und §2, Skripte workflow.local.mjs / dupes.local.mjs / flags.local.mjs):
+
+- Die Ordnung liegt in 90 Ordnern auf der Platte, nicht in Traktors
+  Playlists (10 Stueck, 4 leer, 3 versehentliche Duplikate).
+- Ein Gig-Ordner beginnt als Massen-Download: casa 2.0 hat 304 Dateien.
+  Die Arbeit ist, daraus ~40 zu machen und in pre/mid/peak/late zu teilen.
+- 339 Dateien liegen in 2 bis 5 Ordnern. Ein Ordner ist ein Etikett,
+  keine Schublade. casa 2.0 existiert sogar als zwei getrennte Ordner.
+- 4113 von 4701 Tracks sind unanalysiert. "Analysiert" ist ein Buendel,
+  das immer geschlossen auftritt: FLAGS + TEMPO + BPM_QUALITY +
+  MUSICAL_KEY + LOUDNESS + Grid-Cue. Kein Mischfall in 4701 Eintraegen.
+- Der Analysezustand haengt am DATEIPFAD, nicht am Track. Jede Kopie ist
+  fuer Traktor ein neuer, unanalysierter Track.
+- Unsere Analyse trifft BPM zu 55 % exakt. Genug zum Einsortieren,
+  zu wenig fuer ein Beatgrid.
+
+ZIEL: Vier Stationen einer Kette, ein Gig-Ordner als Werkstueck.
+Feste Zonen mit verschiebbaren Trennlinien, keine schwebenden Fenster.
+
+<strong>Stationen</strong>
+  Laden      URL | Live-Log | Warteschlange
+             → Ordner mit 304 Dateien, Analyse laeuft direkt hinterher
+  Sichten    Warteschlange | grosse Karte + Wellenform | 4 Phasen-Behaelter
+             → 38 Tracks in vier Phasen
+  Bauen      Ordner-Schiene | Energie-Timeline | Set + Reihenfolge
+             → 2:41 h in Reihenfolge
+  Uebergeben Bereitschaftsliste | Uebergabe-Panel
+             → 26 von 38 sofort spielbar
+
+<strong>Obere Leiste</strong>, eine Zeile:
+  links   Marke, Stationen-Wechsler
+  rechts  Quelle · Ziel mit Laufzeit · "26 bereit" · Auftragszaehler · ⌘K
+  Die Mitte bleibt leer.
+
+<strong>Pflicht</strong>
+  1. Tastatur zuerst: Leertaste hoert vor, 1–4 setzen die Phase, X wirft
+     raus, Pfeile gehen weiter. Bei 304 Entscheidungen je Ordner schlaegt
+     jedes Kuerzel jede Maus.
+  2. Drei Analysezustaende sichtbar machen, nicht zwei: bestaetigt /
+     geschaetzt / Traktor rechnet nach. NUR bestaetigte bekommen ein
+     Beatgrid geschrieben — ein falsches Grid ist schlimmer als keins,
+     weil Traktor es nicht nachrechnet und der Versatz erst live auffaellt.
+  3. Fortschritt anzeigen: "118 / 304 gesichtet".
+  4. Set-Laufzeit gegen ein Ziel: "2:41 h von 3:00 h".
+  5. Der Inspector zeigt ALLE Ordner eines Tracks und warnt, wenn er im
+     Ziel schon liegt.
+  6. Station 4 schreibt Ordner UND NML — mit Sicherung vorher und
+     Diff-Vorschau. Nie ohne Bestaetigung.
+  7. "Auf Standard zuruecksetzen" je Station, Layout-Zustand mit
+     Versionsnummer.
+  8. Cover-Wall virtualisieren, bevor Panels verschiebbar werden.
+
+<strong>Offene Frage, die vor Station 4 beantwortet sein muss</strong>: Wie gross ist
+der bestaetigte Anteil? Zweiten BPM-Schaetzer einbauen und gegen die
+29 Testdateien messen — Trefferquote in der Teilmenge, in der beide
+Verfahren uebereinstimmen. Ueber 95 % traegt der Ansatz; darunter faellt
+Station 4 auf "nur das fertige Set nach Traktor, Traktor rechnet".
+
+<strong>Nicht</strong>: keine schwebenden Fenster, kein zweiter Monitor, kein Redesign
+bestehender Ansichten — sie ziehen in die Stationen um.
+
+<strong>Fertig, wenn</strong>: ein Gig-Ordner mit 304 Dateien laesst sich in einem Zug
+auf ~40 Tracks in vier Phasen eindampfen, ohne die Hand von der Tastatur
+zu nehmen, und Station 4 sagt, wie viele davon Traktor ohne Nachrechnen
+spielt — npm run typecheck && npm run build gruen.</pre>
+</section>
+
+<footer class="end">
+  Belege: <code>workflow.local.mjs</code>, <code>dupes.local.mjs</code>, <code>cues.local.mjs</code>,
+  <code>flags.local.mjs</code> gegen <code>collection.nml</code> (4701 Einträge, NML v20) und
+  <code>SpotifyDL/Downloads</code> (4738 Dateien, 90 Ordner).
+  Recherche: <a href="https://dockview.dev/">Dockview</a>,
+  <a href="https://github.com/caplin/FlexLayout">FlexLayout</a>,
+  <a href="https://helpx.adobe.com/premiere/desktop/get-started/tour-the-workspace/dock-group-undock-panels.html">Adobe zu Docking</a>,
+  <a href="https://medium.com/@Adobe_Design/behind-the-design-redesigning-adobe-premiere-elements-72795445dd3b">Adobe Design zur teilweisen Anpassbarkeit</a>.
+</footer>
+
+</div>

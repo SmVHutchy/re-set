@@ -398,6 +398,7 @@ function entryXml(e) {
     albumNode +
     `\n    <INFO ${infoAttrs}></INFO>` +
     tempoNode +
+    gridNode +
     `\n  </ENTRY>`
   );
 }

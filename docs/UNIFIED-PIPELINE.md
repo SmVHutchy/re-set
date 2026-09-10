@@ -287,17 +287,20 @@ Zwei Schätzer, deren Übereinstimmung entscheidet, ob ein Grid geschrieben werd
 
 Das eigentliche Ziel der Kette ist, dass Traktor fertige Tracks nicht noch einmal analysiert. Der Mechanismus dafür ist in der Collection auszählbar:
 
-| | Anzahl | `FLAGS` |
+| | Anzahl | Bit 16 in `FLAGS` |
 |---|---|---|
-| `ENTRY LOCK="1"` | 13 | **28 bei allen 13** |
-| analysiert, ohne Sperre | 575 | 12 (545×) · 8 (30×) |
-| roh | 4113 | nicht gesetzt |
+| `ENTRY LOCK="1"` | 53 | **immer** (28) |
+| `ENTRY LOCK="0"` | 116 | **nie** (12) |
+| kein `LOCK`, analysiert | 847 | nie (12 · 8) |
+| roh | 3685 | kein `FLAGS` |
+
+*(Stand 8. September; die erste Auszählung am 23. Juli kannte nur 13 gesperrte Einträge und kein `LOCK="0"`.)*
 
 28 = 16 + 8 + 4 · 12 = 8 + 4 · 8 = 8. Daraus:
 
 - **Bit 8 — analysiert.** In allen 588 analysierten Einträgen gesetzt, in keinem rohen.
-- **Bit 16 — Analyse gesperrt.** Tritt ausschließlich zusammen mit `LOCK="1"` auf, 13 von 13. Dazu gehört `LOCK_MODIFICATION_TIME` (ebenfalls genau 13×).
-- **Bit 4 — unbekannt.** 558 haben es, 30 nicht. Beide Gruppen haben Tonart, Loudness und Cover zu 100 %; kein geprüftes Feld trennt sie. Wird nicht gebraucht und wird nicht geschrieben.
+- **Bit 16 — Analyse gesperrt.** Folgt `LOCK` in *beide* Richtungen: gesetzt bei allen 53 mit `LOCK="1"`, bei keinem der 116 mit `LOCK="0"`. Das ist der stärkste Beleg im ganzen Formatwissen — die erste Auszählung stützte sich nur auf 13 gesperrte Einträge in eine Richtung.
+- **Bit 4 — unbekannt.** 986 haben es, 30 nicht. Beide Gruppen haben Tonart, Loudness und Cover zu 100 %; kein geprüftes Feld trennt sie. Wird nicht gebraucht und wird nicht geschrieben.
 
 Bestätigt wird das von außen: Lexicon sperrt beim Export nach Traktor die Analyse **automatisch und standardmäßig** — der Support-Thread dazu existiert, weil Nutzer sich über das Schloss wundern ([discuss.lexicondj.com](https://discuss.lexicondj.com/t/traktor-analysis-lock-issue/269)).
 

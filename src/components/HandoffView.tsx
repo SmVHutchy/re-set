@@ -1,8 +1,8 @@
 import { useMemo, useRef, useState } from "react";
-import { DownloadSimple, FolderPlus, Warning } from "@phosphor-icons/react";
+import { ArrowsClockwise, DownloadSimple, FolderPlus, Warning } from "@phosphor-icons/react";
 import { streamNdjson } from "../lib/ndjson";
 import type { Track } from "../lib/nml";
-import { PHASE_COLOR, PHASE_LABEL } from "../lib/tags";
+import { PHASES, PHASE_COLOR, PHASE_LABEL, type Phase } from "../lib/tags";
 import { activeSet, getTags, useStore } from "../lib/store/StoreProvider";
 import { nmlPlaylists, nmlSinglePlaylist, m3u, type ExportOptions } from "../lib/export";
 import { toast } from "../lib/toast";
@@ -70,6 +70,26 @@ interface Plan {
 
 const mb = (b: number) => `${(b / 1024 / 1024).toFixed(0)} MB`;
 
+interface TraktorStatus {
+  gefunden: boolean;
+  datei?: string;
+  traktorLaeuft?: boolean;
+  schreibbar?: boolean;
+  geaendert?: string | null;
+  hinweis?: string | null;
+}
+
+interface DryRun {
+  datei: string;
+  traktorLaeuft: boolean;
+  neu: number;
+  schonVorhanden: number;
+  playlists: number;
+  mitGrid: number;
+  kollisionen: string[];
+  waechstUm: number;
+}
+
 export function HandoffView({ tracks }: { tracks: Track[] }) {
   const { state } = useStore();
   const set = activeSet(state);
@@ -82,6 +102,9 @@ export function HandoffView({ tracks }: { tracks: Track[] }) {
   // dabei bleibt — kostet aber die Möglichkeit, in Traktor einfach neu zu
   // analysieren. Deshalb getrennt und beides sichtbar.
   const [opt, setOpt] = useState<ExportOptions>({ grid: true, sperren: false });
+  const [status, setStatus] = useState<TraktorStatus | null>(null);
+  const [dry, setDry] = useState<DryRun | null>(null);
+  const [syncLaeuft, setSyncLaeuft] = useState(false);
 
   const items = useMemo(() => {
     const byId = new Map(tracks.map((t) => [t.id, t]));
@@ -95,6 +118,86 @@ export function HandoffView({ tracks }: { tracks: Track[] }) {
   }, [items]);
 
   const safeName = (s: string) => (s || "set").replace(/[^\w\-]+/g, "_");
+
+  /** Set nach Phasen gebündelt, in Set-Reihenfolge, leere Phasen weggelassen. */
+  const gruppen = useMemo(() => {
+    const out: Array<{ label: string; tracks: unknown[] }> = [];
+    const alsNutzlast = (t: Track) => ({
+      title: t.title,
+      artist: t.artist,
+      genre: t.genre,
+      comment: null,
+      durationS: t.durationS,
+      bpm: t.bpm,
+      keyValue: t.keyValue,
+      bpmEstimated: t.bpmEstimated,
+      // Der Raster-Anker kommt aus dem Grid-Cue, den unsere Analyse
+      // geschrieben hat — oder aus Traktors eigenem, falls der Track dort
+      // schon analysiert ist.
+      gridMs: t.cues.find((c) => c.kind === "grid")?.startMs ?? null,
+      loc: t.loc,
+    });
+    for (const p of PHASES as Phase[]) {
+      const inPhase = items.filter((t) => getTags(state, t.id).phase === p && t.loc);
+      if (inPhase.length) out.push({ label: PHASE_LABEL[p], tracks: inPhase.map(alsNutzlast) });
+    }
+    const ohne = items.filter((t) => getTags(state, t.id).phase == null && t.loc);
+    if (ohne.length) out.push({ label: "ohne Phase", tracks: ohne.map(alsNutzlast) });
+    return out;
+  }, [items, state]);
+
+  const statusHolen = async () => {
+    try {
+      const r = await fetch("/api/traktor/status");
+      setStatus(await r.json());
+    } catch {
+      toast("Server nicht erreichbar");
+    }
+  };
+
+  const syncVorschau = async () => {
+    setDry(null);
+    try {
+      const r = await fetch("/api/traktor/dry-run", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ setName: set.name, gruppen, opt }),
+      });
+      const d = await r.json();
+      if (!r.ok) {
+        toast(d.error ?? "Vorschau fehlgeschlagen");
+        return;
+      }
+      setDry(d);
+      setStatus((st) => (st ? { ...st, traktorLaeuft: d.traktorLaeuft } : st));
+    } catch {
+      toast("Netzwerkfehler");
+    }
+  };
+
+  const syncSchreiben = async () => {
+    if (!dry) return;
+    setSyncLaeuft(true);
+    try {
+      const r = await fetch("/api/traktor/write", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ setName: set.name, gruppen, opt, confirm: true }),
+      });
+      const d = await r.json();
+      if (!r.ok) {
+        toast(d.error ?? "Schreiben fehlgeschlagen");
+        return;
+      }
+      toast(`${d.playlists} Playlists geschrieben · ${d.neu} neue Tracks`);
+      setDry(null);
+      statusHolen();
+    } catch {
+      toast("Netzwerkfehler");
+    } finally {
+      setSyncLaeuft(false);
+    }
+  };
 
   // Vorschau holen: der Server rechnet, was passieren wuerde, und fasst nichts
   // an. Nur was hier steht, darf danach geschrieben werden.
@@ -318,6 +421,83 @@ export function HandoffView({ tracks }: { tracks: Track[] }) {
           In Traktor über Rechtsklick → <span className="text-ink">Playlist-Ordner importieren</span>{" "}
           laden. Der einfache Playlist-Import nimmt nur eine Liste aus der Datei.
         </p>
+
+        <div className="mt-1 border-t border-line pt-3">
+          <h3 className="mb-1.5 text-[12px] font-medium text-ink">Direkt in Traktor</h3>
+          <p className="mb-2 text-[11px] leading-relaxed text-ink-soft">
+            Schreibt die Phasen als Playlists in deine <code className="text-ink">collection.nml</code>
+            {" "}— ohne Import-Umweg. Vorhandene Tracks werden nicht angefasst, ihre Cues und
+            Beatgrids bleiben.
+          </p>
+
+          {!status && (
+            <button
+              onClick={statusHolen}
+              className="flex h-8 w-full items-center justify-center gap-1.5 rounded-md border border-line text-[12px] text-ink-soft transition-colors hover:text-ink"
+            >
+              <ArrowsClockwise size={13} weight="regular" /> Collection suchen
+            </button>
+          )}
+
+          {status && !status.gefunden && (
+            <p className="text-[11px] text-ink-soft">Keine collection.nml gefunden.</p>
+          )}
+
+          {status?.gefunden && (
+            <div className="rounded-md border border-line bg-base p-2.5 font-mono text-[10px] leading-relaxed text-ink-soft">
+              <div className="truncate text-ink">{status.datei}</div>
+              {status.traktorLaeuft ? (
+                <div className="mt-1" style={{ color: "var(--color-phase-peak)" }}>
+                  Traktor läuft — bitte beenden. Sonst überschreibt es das Geschriebene beim
+                  Schließen.
+                </div>
+              ) : (
+                <div className="mt-1">bereit zum Schreiben</div>
+              )}
+            </div>
+          )}
+
+          {status?.gefunden && (
+            <button
+              onClick={syncVorschau}
+              disabled={syncLaeuft}
+              className="mt-2 flex h-8 w-full items-center justify-center gap-1.5 rounded-md border border-line text-[12px] text-ink-soft transition-colors hover:text-ink disabled:opacity-50"
+            >
+              <ArrowsClockwise size={13} weight="regular" /> Vorschau
+            </button>
+          )}
+
+          {dry && (
+            <div className="mt-2 rounded-md border border-line bg-base p-2.5">
+              <div className="font-mono text-[10px] leading-relaxed text-ink-soft">
+                <div>
+                  {dry.playlists} Playlists · {dry.neu} neue Tracks · {dry.schonVorhanden} schon in
+                  der Collection
+                </div>
+                <div>{dry.mitGrid} davon mit Beatgrid · Datei wächst um {mb(dry.waechstUm)}</div>
+                {dry.kollisionen.length > 0 && (
+                  <div className="mt-1" style={{ color: "var(--color-phase-late)" }}>
+                    Namen existieren schon: {dry.kollisionen.join(" · ")}
+                  </div>
+                )}
+              </div>
+              <button
+                onClick={syncSchreiben}
+                disabled={syncLaeuft || dry.traktorLaeuft}
+                className="mt-2 flex h-8 w-full items-center justify-center gap-1.5 rounded-md bg-accent text-[12px] font-medium text-on-accent disabled:opacity-50"
+              >
+                {dry.traktorLaeuft
+                  ? "Erst Traktor beenden"
+                  : syncLaeuft
+                    ? "Schreibt …"
+                    : "In Collection schreiben"}
+              </button>
+              <p className="mt-1.5 text-[10px] leading-relaxed text-ink-faint">
+                Eine Sicherung mit Zeitstempel wird vorher angelegt.
+              </p>
+            </div>
+          )}
+        </div>
 
         <div className="mt-1 border-t border-line pt-3">
           <h3 className="mb-1.5 text-[12px] font-medium text-ink">Ordner schreiben</h3>

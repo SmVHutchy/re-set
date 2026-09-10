@@ -15,6 +15,13 @@ import {
   buildCommand,
   resolveEngine,
 } from "./download.mjs";
+import {
+  findCollection,
+  isTraktorRunning,
+  schreibeDatei,
+  schreibePlaylists,
+  vorhandenePlaylists,
+} from "./traktor-write.mjs";
 
 const app = express();
 app.use(express.json());
@@ -449,6 +456,109 @@ app.post("/api/handoff/apply", (req, res) => {
 
   send({ type: "done", success: fehler === 0, kopiert, uebersprungen, fehler, wurzel: basis });
   res.end();
+});
+
+// ---- Write-Back nach Traktor ------------------------------------------------
+// Schreibt die Phasen als Playlists direkt in die collection.nml, statt eine
+// Datei zum Importieren zu erzeugen. Das ist der riskanteste Teil der ganzen
+// Anwendung — hier liegen Jahre Analysearbeit —, deshalb vier Sicherungen:
+//
+//   1. Traktor darf nicht laufen. Es haelt die Collection im Speicher und
+//      ueberschreibt beim Beenden alles, was wir inzwischen geschrieben haben.
+//   2. Sicherung vor jedem Schreibvorgang, mit Zeitstempel, nie ueberschrieben.
+//   3. Atomar: temporaere Datei, dann umbenennen. Ein Absturz mittendrin
+//      hinterlaesst nie eine halbe Collection.
+//   4. Vorhandene <ENTRY> werden nie angefasst — nur neue kommen dazu.
+app.get("/api/traktor/status", (_req, res) => {
+  const datei = findCollection();
+  if (!datei) {
+    return res.json({ gefunden: false, hinweis: "Keine collection.nml gefunden." });
+  }
+  let stat = null;
+  try {
+    stat = fs.statSync(datei);
+  } catch {
+    /* gleich als nicht lesbar melden */
+  }
+  const laeuft = isTraktorRunning();
+  res.json({
+    gefunden: true,
+    datei,
+    groesse: stat?.size ?? 0,
+    geaendert: stat ? new Date(stat.mtimeMs).toISOString() : null,
+    traktorLaeuft: laeuft,
+    schreibbar: !laeuft && !!stat,
+    hinweis: laeuft ? "Traktor läuft — bitte beenden, sonst geht das Geschriebene verloren." : null,
+  });
+});
+
+/** Gemeinsame Vorbereitung für Vorschau und Schreiben. */
+function planeWriteBack(body) {
+  const { setName, gruppen, opt, collectionPath } = body ?? {};
+  if (!setName || typeof setName !== "string") throw new Error("Kein Set-Name");
+  if (!Array.isArray(gruppen) || !gruppen.length) throw new Error("Keine Phasen");
+
+  const datei = collectionPath || findCollection();
+  if (!datei || !fs.existsSync(datei)) throw new Error("collection.nml nicht gefunden");
+
+  const xml = fs.readFileSync(datei, "utf-8");
+  const ergebnis = schreibePlaylists(xml, {
+    setName,
+    gruppen,
+    opt: { grid: opt?.grid !== false, sperren: opt?.sperren === true },
+  });
+  return { datei, xml, ergebnis };
+}
+
+app.post("/api/traktor/dry-run", (req, res) => {
+  try {
+    const { datei, xml, ergebnis } = planeWriteBack(req.body);
+    const namen = new Set(vorhandenePlaylists(xml));
+    const kollisionen = (req.body.gruppen ?? [])
+      .map((g) => `${req.body.setName} ${g.label}`)
+      .filter((n) => namen.has(n));
+
+    res.json({
+      datei,
+      traktorLaeuft: isTraktorRunning(),
+      neu: ergebnis.neu,
+      schonVorhanden: ergebnis.schonVorhanden,
+      playlists: ergebnis.playlists,
+      mitGrid: ergebnis.mitGrid,
+      kollisionen,
+      // Groessendifferenz als grobe Plausibilitaetspruefung fuer den Nutzer:
+      // wenn hier Megabytes stehen, stimmt etwas nicht.
+      waechstUm: ergebnis.xml.length - xml.length,
+    });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.post("/api/traktor/write", (req, res) => {
+  if (req.body?.confirm !== true) {
+    return res.status(400).json({ error: "Nicht bestätigt" });
+  }
+  if (isTraktorRunning()) {
+    return res.status(409).json({
+      error: "Traktor läuft. Bitte beenden — sonst überschreibt Traktor das Geschriebene.",
+    });
+  }
+  try {
+    const { datei, ergebnis } = planeWriteBack(req.body);
+    const sicherung = schreibeDatei(datei, ergebnis.xml);
+    res.json({
+      ok: true,
+      datei,
+      sicherung,
+      neu: ergebnis.neu,
+      schonVorhanden: ergebnis.schonVorhanden,
+      playlists: ergebnis.playlists,
+      mitGrid: ergebnis.mitGrid,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // Dateinamen aus einem Anzeigenamen ableiten und Kollisionen vermeiden.

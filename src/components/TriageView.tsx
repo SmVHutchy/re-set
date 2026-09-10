@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowUUpLeft, SkipForward, X } from "@phosphor-icons/react";
 import type { Track } from "../lib/nml";
 import { PHASES, PHASE_COLOR, PHASE_LABEL, type Phase } from "../lib/tags";
@@ -9,11 +9,22 @@ import { toast } from "../lib/toast";
  * Station „Sichten“ — die Schleife, die pro Gig-Ordner dreihundert Mal läuft:
  * vorhören, Phase drücken oder aussortieren, weiter.
  *
- * Der ganze Entwurf folgt einer gemessenen Zahl: der Gig-Ordner `casa 2.0`
- * enthält 304 Dateien, das fertige Set rund 40. Bei diesem Verhältnis kostet
- * jeder Mausweg dreihundertfach — deshalb liegt hier alles auf der Tastatur,
- * und deshalb steht der Fortschritt ständig im Bild.
+ * Der Entwurf folgt einer gemessenen Zahl: der Gig-Ordner `casa 2.0` enthält
+ * 304 Dateien, das fertige Set rund 40. Bei diesem Verhältnis kostet jeder
+ * Mausweg dreihundertfach.
+ *
+ * Die wichtigste Regel steht deshalb über allem: **das Raster bewegt sich
+ * nicht.** Eine beurteilte Kachel verschwindet nicht und rückt nichts nach,
+ * sie bekommt nur ihre Phasenfarbe. Ein Klick sortiert nicht um, er wählt aus.
+ * Wer auf ein Cover zielt, trifft es auch beim zehnten Mal noch — vorher
+ * rutschte die Reihe unter dem Zeiger weg, und man musste den gesuchten Track
+ * nach jedem Urteil neu suchen.
  */
+
+const SPALTEN = 3;
+const TARGET_KEY = "reset.triage.target";
+const FOLDER_KEY = "reset.triage.folder";
+const COMPACT_KEY = "reset.triage.nurOffene";
 
 function fmtDur(seconds: number): string {
   const h = Math.floor(seconds / 3600);
@@ -21,8 +32,7 @@ function fmtDur(seconds: number): string {
   return h > 0 ? `${h}:${String(m).padStart(2, "0")} h` : `${m} min`;
 }
 
-const TARGET_KEY = "reset.triage.target";
-const FOLDER_KEY = "reset.triage.folder";
+type Urteil = Phase | "raus" | null;
 
 export function TriageView({
   tracks,
@@ -59,6 +69,11 @@ export function TriageView({
   const [targetMin, setTargetMin] = useState<number>(() =>
     Number(localStorage.getItem(TARGET_KEY) ?? 180),
   );
+  const [nurOffene, setNurOffene] = useState<boolean>(
+    () => localStorage.getItem(COMPACT_KEY) === "1",
+  );
+  const [autoplay, setAutoplay] = useState(true);
+  const [cursorId, setCursorId] = useState<string | null>(null);
 
   useEffect(() => {
     if (folder) localStorage.setItem(FOLDER_KEY, folder);
@@ -66,9 +81,13 @@ export function TriageView({
   useEffect(() => {
     localStorage.setItem(TARGET_KEY, String(targetMin));
   }, [targetMin]);
+  useEffect(() => {
+    localStorage.setItem(COMPACT_KEY, nurOffene ? "1" : "0");
+  }, [nurOffene]);
 
   const active = folder ?? folders[0]?.[0] ?? null;
 
+  // Feste Reihenfolge — die Grundlage dafür, dass nichts springt.
   const inFolder = useMemo(
     () => tracks.filter((t) => (t.folder ?? "ohne Ordner") === active),
     [tracks, active],
@@ -76,14 +95,37 @@ export function TriageView({
 
   const setIds = useMemo(() => new Set(set.trackIds), [set.trackIds]);
 
-  // Entschieden ist, was im Set liegt oder aussortiert wurde. Alles andere
-  // wartet — in Dateireihenfolge, damit die Schleife vorhersehbar bleibt.
-  const queue = useMemo(
-    () => inFolder.filter((t) => !setIds.has(t.id) && !state.dismissed[t.id]),
-    [inFolder, setIds, state.dismissed],
+  const urteilVon = useCallback(
+    (t: Track): Urteil => {
+      if (state.dismissed[t.id]) return "raus";
+      if (setIds.has(t.id)) return getTags(state, t.id).phase ?? null;
+      return null;
+    },
+    [state, setIds],
   );
 
-  const done = inFolder.length - queue.length;
+  const offen = useCallback(
+    (t: Track) => !state.dismissed[t.id] && !setIds.has(t.id),
+    [state.dismissed, setIds],
+  );
+
+  const sichtbar = useMemo(
+    () => (nurOffene ? inFolder.filter(offen) : inFolder),
+    [inFolder, nurOffene, offen],
+  );
+
+  const erledigt = inFolder.length - inFolder.filter(offen).length;
+
+  // Der Cursor zeigt auf eine Kachel, nicht auf einen Listenplatz: verschwindet
+  // sie (Ordnerwechsel, Kompaktmodus), fällt er auf den ersten offenen zurück.
+  const cursorIndex = useMemo(() => {
+    const i = sichtbar.findIndex((t) => t.id === cursorId);
+    if (i >= 0) return i;
+    const ersterOffen = sichtbar.findIndex(offen);
+    return ersterOffen >= 0 ? ersterOffen : 0;
+  }, [sichtbar, cursorId, offen]);
+
+  const shown = sichtbar[cursorIndex] ?? null;
 
   const setTracks = useMemo(() => {
     const byId = new Map(tracks.map((t) => [t.id, t]));
@@ -95,71 +137,64 @@ export function TriageView({
 
   const byPhase = useMemo(() => {
     const m: Record<Phase | "offen", Track[]> = { pre: [], mid: [], peak: [], late: [], offen: [] };
-    for (const t of setTracks) {
-      const p = getTags(state, t.id).phase;
-      m[p ?? "offen"].push(t);
-    }
+    for (const t of setTracks) m[getTags(state, t.id).phase ?? "offen"].push(t);
     return m;
   }, [setTracks, state]);
 
-  // --- Aktionen -------------------------------------------------------------
+  // --- Bewegung -------------------------------------------------------------
+  /** Nach einem Urteil zum nächsten *offenen* Track — nicht stur eins weiter. */
+  const weiterZuOffen = useCallback(
+    (abIndex: number) => {
+      for (let i = abIndex; i < sichtbar.length; i++) {
+        if (offen(sichtbar[i])) return setCursorId(sichtbar[i].id);
+      }
+      // Nichts mehr dahinter: von vorn suchen, sonst stehen bleiben.
+      for (let i = 0; i < abIndex; i++) {
+        if (offen(sichtbar[i])) return setCursorId(sichtbar[i].id);
+      }
+      setCursorId(sichtbar[Math.min(abIndex, sichtbar.length - 1)]?.id ?? null);
+    },
+    [sichtbar, offen],
+  );
+
+  const bewege = useCallback(
+    (delta: number) => {
+      const ziel = Math.max(0, Math.min(sichtbar.length - 1, cursorIndex + delta));
+      setCursorId(sichtbar[ziel]?.id ?? null);
+    },
+    [sichtbar, cursorIndex],
+  );
+
+  // --- Urteile --------------------------------------------------------------
   const judge = useCallback(
     (phase: Phase) => {
-      if (!shownRef.current) return;
       const t = shownRef.current;
+      if (!t) return;
       dispatch({ type: "addToSet", trackId: t.id });
       dispatch({ type: "setPhase", id: t.id, phase });
-      setJumpTo(null);
       toast(`${PHASE_LABEL[phase]} · ${t.title}`);
+      weiterRef.current(cursorRef.current + 1);
     },
     [dispatch],
   );
 
   const drop = useCallback(() => {
-    if (!shownRef.current) return;
-    setJumpTo(null);
-    dispatch({ type: "dismiss", id: shownRef.current.id });
+    const t = shownRef.current;
+    if (!t) return;
+    dispatch({ type: "dismiss", id: t.id });
+    weiterRef.current(cursorRef.current + 1);
   }, [dispatch]);
 
-  const skip = useCallback(() => {
-    const current = shownRef.current;
-    if (!current) return;
-    // Zurückstellen statt aussortieren: ans Ende, indem wir es kurz
-    // aussortieren und sofort zurückholen, wäre unsauber — stattdessen
-    // merken wir uns die Zurückgestellten getrennt.
-    setJumpTo(null);
-    setDeferred((d) => [...d, current.id]);
-  }, []);
+  const skip = useCallback(() => bewegeRef.current(1), []);
 
-  const [deferred, setDeferred] = useState<string[]>([]);
-  // Ein angeklicktes Cover wird vorgezogen — man sieht in der Warteschlange
-  // etwas Interessantes und will es sofort beurteilen, nicht in dreissig
-  // Tracks. Zurueckgestellte wandern ans Ende.
-  const [jumpTo, setJumpTo] = useState<string | null>(null);
-  const orderedQueue = useMemo(() => {
-    const back = new Set(deferred);
-    const front = queue.filter((t) => !back.has(t.id));
-    const rear = queue.filter((t) => back.has(t.id));
-    const all = [...front, ...rear];
-    if (!jumpTo) return all;
-    const picked = all.find((t) => t.id === jumpTo);
-    return picked ? [picked, ...all.filter((t) => t.id !== jumpTo)] : all;
-  }, [queue, deferred, jumpTo]);
-  const shown = orderedQueue[0] ?? null;
-
-  // Beim Sichten wird nicht auf Zuruf gehoert, sondern automatisch: wer 304
-  // Tracks beurteilt, soll den naechsten hoeren, sobald er da ist — nicht erst
-  // eine Taste dafuer druecken. Der Player bleibt sonst auf dem alten Track
-  // stehen, und man urteilt ueber das, was gerade laeuft.
-  const [autoplay, setAutoplay] = useState(true);
-
+  // --- Vorhören -------------------------------------------------------------
+  // Automatisch, nicht auf Zuruf: wer 304 Tracks beurteilt, soll den nächsten
+  // hören, sobald er da ist. Sonst bleibt der Player auf dem alten Track und
+  // man urteilt über das, was gerade läuft.
   useEffect(() => {
-    if (autoplay && shown && shown.audioPath && previewId !== shown.id) {
-      onPreview(shown.id);
-    }
+    if (autoplay && shown && shown.audioPath && previewId !== shown.id) onPreview(shown.id);
   }, [autoplay, shown, previewId, onPreview]);
 
-  // Leertaste: laeuft der gezeigte Track schon, anhalten statt neu starten.
   const preview = useCallback(() => {
     if (!shown) return;
     if (previewId === shown.id) onTogglePlay();
@@ -172,14 +207,13 @@ export function TriageView({
       const el = e.target as HTMLElement | null;
       if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable)) return;
       if (e.metaKey || e.ctrlKey || e.altKey) return;
-      // Gedrueckt gehaltene Taste ignorieren: die Tastaturwiederholung des
-      // Systems wuerde sonst mehrere Tracks in einem Rutsch beurteilen, ohne
-      // dass man sie gehoert hat. Eine Entscheidung braucht einen Anschlag.
+      // Gedrückt gehaltene Taste ignorieren: die Tastaturwiederholung würde
+      // sonst mehrere Tracks beurteilen, ohne dass man sie gehört hat.
       if (e.repeat) return;
 
       if (e.key === " ") {
         e.preventDefault();
-        preview();
+        previewRef.current();
       } else if (e.key >= "1" && e.key <= "4") {
         e.preventDefault();
         judgeRef.current(PHASES[Number(e.key) - 1]);
@@ -188,18 +222,38 @@ export function TriageView({
         dropRef.current();
       } else if (e.key === "ArrowRight") {
         e.preventDefault();
-        skipRef.current();
+        bewegeRef.current(1);
+      } else if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        bewegeRef.current(-1);
+      } else if (e.key === "ArrowDown") {
+        e.preventDefault();
+        bewegeRef.current(SPALTEN);
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        bewegeRef.current(-SPALTEN);
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [preview]);
+  }, []);
 
-  // Refs, damit der Tastatur-Listener nicht bei jedem Track neu gebunden wird.
+  // Refs, damit der Tastatur-Listener genau einmal gebunden wird.
   const shownRef = useRefLatest(shown);
+  const cursorRef = useRefLatest(cursorIndex);
   const judgeRef = useRefLatest(judge);
   const dropRef = useRefLatest(drop);
-  const skipRef = useRefLatest(skip);
+  const bewegeRef = useRefLatest(bewege);
+  const weiterRef = useRefLatest(weiterZuOffen);
+  const previewRef = useRefLatest(preview);
+
+  // Cursor immer im Blick behalten — bei 304 Kacheln sonst schnell außerhalb.
+  const gridRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    gridRef.current
+      ?.querySelector<HTMLElement>('[data-cursor="1"]')
+      ?.scrollIntoView({ block: "nearest" });
+  }, [cursorIndex, sichtbar.length]);
 
   // --- Darstellung ----------------------------------------------------------
   if (!folders.length) {
@@ -214,12 +268,12 @@ export function TriageView({
     );
   }
 
-  const cur = shown;
-  const tags = cur ? getTags(state, cur.id) : null;
+  const randFarbe = (u: Urteil) =>
+    u === "raus" ? "var(--color-line-strong)" : u ? PHASE_COLOR[u] : "transparent";
 
   return (
-    <div className="view-fade mt-7 grid gap-4 lg:grid-cols-[220px_1fr_270px]">
-      {/* Warteschlange */}
+    <div className="view-fade mt-7 grid gap-4 lg:grid-cols-[260px_1fr_260px]">
+      {/* Warteschlange — feste Reihenfolge, nichts springt */}
       <section className="rounded-lg border border-line bg-surface p-4">
         <label className="mb-1.5 block text-[10px] uppercase tracking-wider text-ink-faint">
           Ordner
@@ -228,7 +282,7 @@ export function TriageView({
           value={active ?? ""}
           onChange={(e) => {
             setFolder(e.target.value);
-            setDeferred([]);
+            setCursorId(null);
           }}
           className="mb-3 h-8 w-full rounded-md border border-line bg-base px-2 text-[12px] text-ink-soft"
         >
@@ -240,61 +294,88 @@ export function TriageView({
         </select>
 
         <div className="mb-1 flex items-baseline justify-between font-mono text-[11px]">
-          <span className="text-ink">{done} / {inFolder.length}</span>
+          <span className="text-ink">
+            {erledigt} / {inFolder.length}
+          </span>
           <span className="text-ink-faint">gesichtet</span>
         </div>
-        <div className="mb-3 h-1 w-full overflow-hidden rounded-full bg-raise">
+        <div className="mb-2 h-1 w-full overflow-hidden rounded-full bg-raise">
           <div
             className="h-full bg-accent transition-[width] duration-300"
-            style={{ width: `${inFolder.length ? (done / inFolder.length) * 100 : 0}%` }}
+            style={{ width: `${inFolder.length ? (erledigt / inFolder.length) * 100 : 0}%` }}
           />
         </div>
 
-        <div className="grid max-h-[440px] grid-cols-3 gap-1.5 overflow-y-auto">
-          {orderedQueue.slice(0, 60).map((t, i) => (
-            <button
-              key={t.id}
-              onClick={() => setJumpTo(t.id)}
-              title={`${t.artist} – ${t.title}`}
-              className={`aspect-square overflow-hidden rounded-sm transition-opacity ${
-                i === 0 ? "outline outline-1 outline-accent" : "opacity-60 hover:opacity-100"
-              }`}
-            >
-              {t.coverPath ? (
-                <img
-                  src={t.coverPath}
-                  alt=""
-                  loading="lazy"
-                  onError={(e) => {
-                    e.currentTarget.style.display = "none";
-                  }}
-                  className="h-full w-full object-cover"
-                />
-              ) : (
-                <span className="flex h-full w-full items-center justify-center bg-raise text-[8px] text-ink-faint">
-                  {t.title.slice(0, 2)}
-                </span>
-              )}
-            </button>
-          ))}
+        <label className="mb-2 flex cursor-pointer items-center gap-1.5 text-[10px] text-ink-soft">
+          <input
+            type="checkbox"
+            checked={nurOffene}
+            onChange={(e) => setNurOffene(e.target.checked)}
+            className="h-3 w-3 rounded border border-line"
+          />
+          nur offene zeigen
+          <span className="text-ink-faint">(Raster rückt dann nach)</span>
+        </label>
+
+        <div ref={gridRef} className="grid max-h-[440px] grid-cols-3 gap-1.5 overflow-y-auto p-0.5">
+          {sichtbar.map((t, i) => {
+            const u = urteilVon(t);
+            const amCursor = i === cursorIndex;
+            return (
+              <button
+                key={t.id}
+                data-cursor={amCursor ? "1" : undefined}
+                onClick={() => setCursorId(t.id)}
+                title={`${t.artist} – ${t.title}`}
+                className="relative aspect-square overflow-hidden rounded-sm transition-transform"
+                style={{
+                  outline: amCursor ? "2px solid var(--color-accent)" : `1.5px solid ${randFarbe(u)}`,
+                  outlineOffset: amCursor ? "1px" : "-1.5px",
+                  // Beurteilte Kacheln bleiben liegen, treten aber zurück —
+                  // so sieht man den Fortschritt an Ort und Stelle.
+                  opacity: u === "raus" ? 0.25 : u ? 0.55 : 1,
+                }}
+              >
+                {t.coverPath ? (
+                  <img
+                    src={t.coverPath}
+                    alt=""
+                    loading="lazy"
+                    onError={(e) => {
+                      e.currentTarget.style.display = "none";
+                    }}
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <span className="flex h-full w-full items-center justify-center bg-raise text-[8px] text-ink-faint">
+                    {t.title.slice(0, 2)}
+                  </span>
+                )}
+                {u && u !== "raus" && (
+                  <span
+                    className="absolute bottom-0 left-0 right-0 py-[1px] text-center font-mono text-[7px] leading-none"
+                    style={{ background: PHASE_COLOR[u], color: "var(--color-base)" }}
+                  >
+                    {PHASE_LABEL[u]}
+                  </span>
+                )}
+                {u === "raus" && (
+                  <span className="absolute inset-0 flex items-center justify-center">
+                    <X size={14} weight="bold" color="var(--color-ink-faint)" />
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
-        {orderedQueue.length > 60 && (
-          <div className="mt-1.5 font-mono text-[10px] text-ink-faint">
-            … {orderedQueue.length - 60} weitere
-          </div>
-        )}
       </section>
 
       {/* Bühne */}
       <section className="flex flex-col items-center justify-center gap-4 rounded-lg border border-line bg-base p-6">
-        {cur ? (
+        {shown ? (
           <>
-            {cur.coverPath ? (
-              <img
-                src={cur.coverPath}
-                alt=""
-                className="h-40 w-40 rounded-md object-cover"
-              />
+            {shown.coverPath ? (
+              <img src={shown.coverPath} alt="" className="h-40 w-40 rounded-md object-cover" />
             ) : (
               <div className="flex h-40 w-40 items-center justify-center rounded-md bg-raise font-mono text-[11px] text-ink-faint">
                 kein Cover
@@ -302,29 +383,36 @@ export function TriageView({
             )}
 
             <div className="text-center">
-              <div className="text-[15px] text-ink">{cur.title}</div>
-              <div className="text-[12px] text-ink-soft">{cur.artist}</div>
+              <div className="text-[15px] text-ink">{shown.title}</div>
+              <div className="text-[12px] text-ink-soft">{shown.artist}</div>
             </div>
 
             <div className="flex flex-wrap items-center justify-center gap-2 font-mono text-[11px] text-ink-faint">
-              {cur.keyCamelot && <span className="text-accent">{cur.keyCamelot}</span>}
-              {cur.bpm != null && <span>{cur.bpm.toFixed(1)} BPM</span>}
-              {(cur.keyEstimated || cur.bpmEstimated) && <span>geschätzt</span>}
-              {cur.genre && <span>· {cur.genre}</span>}
+              {shown.keyCamelot && <span className="text-accent">{shown.keyCamelot}</span>}
+              {shown.bpm != null && <span>{shown.bpm.toFixed(1)} BPM</span>}
+              {(shown.keyEstimated || shown.bpmEstimated) && <span>geschätzt</span>}
+              {shown.genre && <span>· {shown.genre}</span>}
             </div>
 
             <div className="flex flex-wrap items-center justify-center gap-1.5">
-              {PHASES.map((p, i) => (
-                <button
-                  key={p}
-                  onClick={() => judge(p)}
-                  className="flex h-9 items-center gap-1.5 rounded-md border px-3 text-[12px] transition-colors"
-                  style={{ borderColor: PHASE_COLOR[p], color: PHASE_COLOR[p] }}
-                >
-                  <span className="font-mono text-[10px] opacity-70">{i + 1}</span>
-                  {PHASE_LABEL[p]}
-                </button>
-              ))}
+              {PHASES.map((p, i) => {
+                const aktiv = urteilVon(shown) === p;
+                return (
+                  <button
+                    key={p}
+                    onClick={() => judge(p)}
+                    className="flex h-9 items-center gap-1.5 rounded-md border px-3 text-[12px] transition-colors"
+                    style={{
+                      borderColor: PHASE_COLOR[p],
+                      color: aktiv ? "var(--color-base)" : PHASE_COLOR[p],
+                      background: aktiv ? PHASE_COLOR[p] : "transparent",
+                    }}
+                  >
+                    <span className="font-mono text-[10px] opacity-70">{i + 1}</span>
+                    {PHASE_LABEL[p]}
+                  </button>
+                );
+              })}
               <button
                 onClick={drop}
                 className="flex h-9 items-center gap-1.5 rounded-md border border-line px-3 text-[12px] text-ink-soft transition-colors hover:text-ink"
@@ -335,7 +423,7 @@ export function TriageView({
                 onClick={skip}
                 className="flex h-9 items-center gap-1.5 rounded-md border border-line px-3 text-[12px] text-ink-soft transition-colors hover:text-ink"
               >
-                <SkipForward size={13} weight="regular" /> später
+                <SkipForward size={13} weight="regular" /> weiter
               </button>
             </div>
 
@@ -372,14 +460,8 @@ export function TriageView({
             </div>
 
             <p className="text-center font-mono text-[10px] leading-relaxed text-ink-soft">
-              Leertaste hören · 1–4 Phase · X raus · → später · ⌘Z zurück
+              Leertaste hören · 1–4 Phase · X raus · Pfeile bewegen · ⌘Z zurück
             </p>
-
-            {tags?.phase && (
-              <span className="font-mono text-[10px]" style={{ color: PHASE_COLOR[tags.phase] }}>
-                bereits {PHASE_LABEL[tags.phase]}
-              </span>
-            )}
           </>
         ) : (
           <div className="text-center">
@@ -461,9 +543,9 @@ export function TriageView({
   );
 }
 
-/** Hält den jeweils neuesten Callback, ohne den Listener neu zu binden. */
+/** Hält den jeweils neuesten Wert, ohne Effekte neu zu binden. */
 function useRefLatest<T>(value: T) {
-  const ref = useState(() => ({ current: value }))[0];
+  const ref = useRef(value);
   ref.current = value;
   return ref;
 }
